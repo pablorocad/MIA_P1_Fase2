@@ -1,0 +1,24 @@
+digraph G{ 
+node [shape=plaintext] 
+struct1 [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
+<tr><td>Nombre</td><td>Valor</td></tr>
+<tr><td>mbr_tamano</td><td>15728640</td></tr>
+<tr><td>mbr_fecha_creacion</td><td>Wed Mar  4 23:02:59 2020
+</td></tr>
+<tr><td>mbr_disk_signature</td><td>1804289383</td></tr>
+<tr><td>mbr_fit</td><td>BF</td></tr>
+<tr><td>part_status_0</td><td>1</td></tr>
+<tr><td>part_type_0</td><td>P</td></tr>
+<tr><td>part_fit_0</td><td>WF</td></tr>
+<tr><td>part_start_0</td><td>4252</td></tr>
+<tr><td>part_size_0</td><td>2048</td></tr>
+<tr><td>part_name_0</td><td>par4</td></tr>
+<tr><td>part_status_1</td><td>1</td></tr>
+<tr><td>part_type_1</td><td>P</td></tr>
+<tr><td>part_fit_1</td><td>WF</td></tr>
+<tr><td>part_start_1</td><td>6300</td></tr>
+<tr><td>part_size_1</td><td>2048</td></tr>
+<tr><td>part_name_1</td><td>par5</td></tr>
+</TABLE>>];
+}

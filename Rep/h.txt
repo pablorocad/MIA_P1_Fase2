@@ -1,0 +1,1 @@
+digraph G{node [shape=record];struct1 [label="MBR|Primaria|Primaria|Primaria"]}
