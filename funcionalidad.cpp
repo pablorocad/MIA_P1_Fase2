@@ -737,6 +737,22 @@ void Funcionalidad::Ejecutar(Nodo *temp){
         }
 
     }
+    else if(temp->token == "mkdir")
+    {
+        QHash<QString,QString> par = parametros(temp->hijo.first());//Tomamos todos nuestros parametros
+        if(!par.contains("path"))
+        {
+            cout << "Falta el parametro PATH en crear reporte | linea: " << temp->linea << " columna: " << temp->columna << endl;
+        }
+        else{
+            QStringList path = par.value("path").split('/');
+            QString name = path.last();
+            path.removeLast();
+
+            int innodoPadre = buscarInnodo(path);
+            crearCarpeta(innodoPadre,name,path);
+        }
+    }
     else if(temp->token == "rep"){
         QHash<QString,QString> par = parametros(temp->hijo.first());//Tomamos todos nuestros parametros
 
@@ -899,7 +915,19 @@ void Funcionalidad::Ejecutar(Nodo *temp){
 
 }
                 else if (par.value("name") == "tree") {
+                    SuperBloque block;
+                    char byte;
+
                     out << "digraph G{ \n";
+
+                    file = fopen(mount[partLetra].path.toUtf8().constData(),"rb+");
+                    fseek(file,mount[partLetra].numero[partNum].particion.part_start,SEEK_SET);
+                    fread(&block,sizeof (struct SuperBloque),1,file);
+
+                    innodoTree(0,0,out,file,block);
+
+                    fclose(file);
+                    out << "}\n";
                 }
 
 
@@ -943,6 +971,47 @@ void Funcionalidad::Ejecutar(Nodo *temp){
 
 
     }
+}
+
+void Funcionalidad::innodoTree(int padre, int actual, ofstream &out_, FILE *file, SuperBloque block)
+{
+    Innodo innodo;
+    fseek(file,block.s_inode_start,SEEK_SET);
+    fseek(file,actual*sizeof (struct Innodo),SEEK_CUR);
+    fread(&innodo,sizeof (struct Innodo),1,file);
+
+    out_ << "innode_" << actual;
+    out_ << " [shape=record, label=\"{Inodo_" << actual << " ";
+    out_ << "| {i_uid | " << innodo.i_uid << "}";
+    out_ << "| {i_gid | " << innodo.i_gid << "}";
+    out_ << "| {i_size | " << innodo.i_size << "}";
+    out_ << "| {i_atime | " << innodo.i_atime << "}";
+    out_ << "| {i_ctime | " << innodo.i_ctime << "}";
+    out_ << "| {i_mtime | " << innodo.i_mtime << "}";
+    out_ << "| {i_type | " << innodo.i_type << "}";
+    out_ << "| {i_perm | " << innodo.i_perm << "}";
+
+    for(int x = 0; x < 12; x++)
+    {
+        if(innodo.i_block[x] == -1)
+        {
+            out_ << "| {AD " << x << "| " << innodo.i_block[x] << "}";
+        }
+        else {
+            out_ << "| {AD" << x << "| <i" << actual << "ad" << x << "> " << innodo.i_block[x] << "}";
+        }
+    }
+
+    out_ << "}\"]";
+
+    if(padre != -1)
+    {
+
+    }
+}
+void Funcionalidad::innodeBlock(int padre, int actual, ofstream out, FILE *file, SuperBloque block)
+{
+
 }
 
 QHash<QString,QString> Funcionalidad::parametros(Nodo *temp)
@@ -1122,6 +1191,7 @@ void Funcionalidad::formatearParticion(QHash<QString,QString> par)
 
         time_t t = time(0);
         string tiempo = ctime(&t);
+
         strcpy(block.s_mtime,tiempo.c_str());
         block.s_umtime[0] = '-';
         block.s_umtime[1] = '1';
@@ -1130,8 +1200,8 @@ void Funcionalidad::formatearParticion(QHash<QString,QString> par)
         block.s_magic = 201700584;
         block.s_inode_size = sizeof (struct Innodo);
         block.s_block_size = sizeof(struct BloqueCarpeta);
-        block.s_firts_ino = 1;
-        block.s_first_blo = 1;
+        block.s_first_ino = 1;
+        block.s_first_blo = 0;
 
         block.s_bm_inode_start = particion.part_start + sizeof (struct SuperBloque);
         if(block.s_filesystem_type == 3)
@@ -1176,15 +1246,32 @@ void Funcionalidad::formatearParticion(QHash<QString,QString> par)
 
         t = time(0);
         tiempo = ctime(&t);
-        strcpy(in.i_atime,tiempo.c_str());
-        strcpy(in.i_ctime,tiempo.c_str());
-        strcpy(in.i_mtime,tiempo.c_str());
+        for(int x = 0; x < 30; x++)
+        {
+            in.i_atime[x] = NULL;
+            in.i_ctime[x] = NULL;
+            in.i_mtime[x] = NULL;
+        }
+
+        for(int y = 0; y < tiempo.size(); y++)
+        {
+            if(tiempo[y] != NULL && tiempo[y] != '\n')
+            {
+                in.i_atime[y] = tiempo[y];
+                in.i_ctime[y] = tiempo[y];
+                in.i_mtime[y] = tiempo[y];
+            }
+        }
+
+        //strcpy(in.i_atime,tiempo.c_str());
+        //strcpy(in.i_ctime,tiempo.c_str());
+        //strcpy(in.i_mtime,tiempo.c_str());
 
         for(int x = 0; x < 15; x++){
             in.i_block[x] = -1;
         }
 
-        in.i_type = 0;
+        in.i_type = '0';
         in.i_perm = 700;
 
         fseek(file,block.s_inode_start,SEEK_SET);
@@ -1198,9 +1285,8 @@ void Funcionalidad::formatearParticion(QHash<QString,QString> par)
     }
 }
 
-int Funcionalidad::buscarInnodo(QHash<QString,QString> par)
+int Funcionalidad::buscarInnodo(QStringList pathAux)
 {
-    QStringList pathAux = pathArchivo(par.value("path"));
     //pathAux.removeLast();
     pathAux.removeFirst();
 
@@ -1244,16 +1330,24 @@ int Funcionalidad::buscarInnodo(int numInnodo, QStringList path,int posicionPath
             {
                 int num = innodo.i_block[x];
                 fseek(file,block.s_block_start,SEEK_SET);//inicio del area bloques
-                fseek(file, num*sizeof (struct  BloqueCarpeta),SEEK_SET);// nos movemos al bloque
-
-                if(innodo.i_type == '0')//si es carpeta
+                fseek(file, num*sizeof (struct  BloqueCarpeta),SEEK_CUR);// nos movemos al bloque
+                char t = innodo.i_type;
+                if(t == '0')//si es carpeta
                 {
                     BloqueCarpeta carpeta;
                     fread(&carpeta,sizeof(struct BloqueCarpeta),1,file);//leemos el bloque
 
                     for(int y = 2; y < 4; y++)
                     {
-                        QString name(carpeta.b_content[y].b_name);
+
+                        QString name = "";
+                        for(char c : carpeta.b_content[y].b_name)
+                        {
+                            if(c != NULL)
+                            {
+                            name.append(c);
+                            }
+                        }
 
                         if(name == path.value(posicionPath))//si la carpeta contiene lo que buscamos
                         {
@@ -1280,7 +1374,7 @@ int Funcionalidad::buscarInnodo(int numInnodo, QStringList path,int posicionPath
     return -1;
 }
 
-void Funcionalidad::crearCarpeta(int numInnodo, QString name)
+void Funcionalidad::crearCarpeta(int numInnodoPadre, QString name, QStringList path)
 {
     string url = usuario.pathDisco.toStdString();
     const char *u = url.c_str();
@@ -1293,7 +1387,7 @@ void Funcionalidad::crearCarpeta(int numInnodo, QString name)
     fseek(file,usuario.particion.part_start,SEEK_SET);
     fread(&block,sizeof (struct SuperBloque),1,file);
     fseek(file,block.s_inode_start,SEEK_SET);
-    fseek(file,numInnodo*sizeof (struct Innodo),SEEK_CUR);
+    fseek(file,numInnodoPadre*sizeof (struct Innodo),SEEK_CUR);
     fread(&innodo,sizeof (struct Innodo),1,file);//Tomamos el innodo donde crearemos la carpeta
 
     bool indirecto = true;
@@ -1311,22 +1405,27 @@ void Funcionalidad::crearCarpeta(int numInnodo, QString name)
             {
                 if(carpeta.b_content[y].b_innodo == -1)//si hay espacio en el bloque
                 {
-                    int numInnodo = block.s_firts_ino;//primer innodo libre
+                    int nInnodo = block.s_first_ino;//primer innodo libre
                     marcarInnodoLibre(block,file);//marcamos que se uso
-                    block.s_firts_ino = primerInnodoLibre(block,file);//guardamos el nuevo innodo libre
+                    block.s_first_ino = primerInnodoLibre(block,file);//guardamos el nuevo innodo libre
 
-                    carpeta.b_content[y].b_innodo = numInnodo;
+                    carpeta.b_content[y].b_innodo = nInnodo;
                     string n = name.toStdString();
+
+                    for(int g = 0; g < 12; g++)
+                    {
+                        carpeta.b_content[y].b_name[g] = NULL;
+                    }
                     for(int z = 0; z < n.size(); z++)
                     {
                         carpeta.b_content[y].b_name[z] = n[z];
                     }
 
-                    Innodo nuevo = nuevoInnodo();
+                    Innodo nuevo = nuevoInnodo('0');
 
                     fseek(file,block.s_inode_start,SEEK_SET);
-                    fseek(file,numInnodo,SEEK_CUR);
-                    fwrite(&innodo,sizeof(struct Innodo),1,file);//escribimos el innodo
+                    fseek(file,nInnodo,SEEK_CUR);
+                    fwrite(&nuevo,sizeof(struct Innodo),1,file);//escribimos el nuevo innodo
 
                     fseek(file,block.s_block_start,SEEK_SET);
                     fseek(file,innodo.i_block[x]*sizeof (struct BloqueCarpeta),SEEK_CUR);
@@ -1334,6 +1433,7 @@ void Funcionalidad::crearCarpeta(int numInnodo, QString name)
 
                     fseek(file,usuario.particion.part_start,SEEK_SET);
                     fwrite(&block,sizeof(struct SuperBloque),1,file);
+                    fclose(file);
                     return;
                 }
             }
@@ -1348,14 +1448,77 @@ void Funcionalidad::crearCarpeta(int numInnodo, QString name)
 
     if(espacioDisponible != -1)
     {
+        //creamos un bloque carpeta-----------------------------------------------------------
         BloqueCarpeta carpeta;
         fseek(file,block.s_block_start,SEEK_SET);
+       int numBloque = block.s_first_blo;
+       marcarBloqueLIbre(block,file);
+       block.s_first_blo = primerBloqueLIbre(block, file);
 
-        int numBloque = block.s_first_blo;
-        marcarBloqueLIbre(block,file);
-        block.s_first_blo = primerBloqueLIbre(block, file);
+        for(int g = 0; g < 12; g++)
+        {
+            carpeta.b_content[0].b_name[g] = NULL;
+            carpeta.b_content[1].b_name[g] = NULL;
+            carpeta.b_content[2].b_name[g] = NULL;
+            carpeta.b_content[3].b_name[g] = NULL;
+        }
+
+        int actual,padre;
+
+        if(path.size() <= 1)
+        {
+            actual = 0;
+            padre = 0;
+        }
+        else
+        {
+            actual = buscarInnodo(path);
+            path.removeLast();
+            padre = buscarInnodo(path);
+        }
 
         carpeta.b_content[0].b_name[0] = '.';
+        carpeta.b_content[0].b_innodo = actual;
+
+        carpeta.b_content[1].b_name[0] = '.';
+        carpeta.b_content[1].b_name[1] = '.';
+        carpeta.b_content[1].b_innodo = padre;//padre
+        //-----------------------------------------------------------------------------------
+
+        //marcamos que usamos un bloque------------------------------------------------------
+        innodo.i_block[espacioDisponible] = numBloque;
+        //-----------------------------------------------------------------------------------
+        //insertamos el nuevo innodo---------------------------------------------------------
+        int nInnodo = block.s_first_ino;//primer innodo libre
+        marcarInnodoLibre(block,file);//marcamos que se uso
+        block.s_first_ino = primerInnodoLibre(block,file);//guardamos el nuevo innodo libre
+
+        carpeta.b_content[2].b_innodo = nInnodo;
+        string n = name.toStdString();
+        for(int z = 0; z < n.size(); z++)
+        {
+            carpeta.b_content[2].b_name[z] = n[z];
+        }
+
+        Innodo nuevo = nuevoInnodo('0');
+
+        fseek(file,block.s_inode_start,SEEK_SET);
+        fseek(file,numInnodoPadre*sizeof (struct Innodo),SEEK_CUR);
+        fwrite(&innodo,sizeof(struct Innodo),1,file);//escribimos el innodo actualizado
+
+        fseek(file,block.s_inode_start,SEEK_SET);
+        fseek(file,nInnodo*sizeof (struct Innodo),SEEK_CUR);
+        fwrite(&nuevo,sizeof(struct Innodo),1,file);//escribimos el nuevo innodo
+
+        fseek(file,block.s_block_start,SEEK_SET);
+        fseek(file,numBloque*sizeof (struct BloqueCarpeta),SEEK_CUR);
+        fwrite(&carpeta,sizeof (struct BloqueCarpeta),1,file);//escribimos el bloque carpeta actualizada
+
+        fseek(file,usuario.particion.part_start,SEEK_SET);
+        fwrite(&block,sizeof(struct SuperBloque),1,file);
+        //-------------------------------------------------------------------------------------
+        fclose(file);
+        return;
     }
 
     if(indirecto)
@@ -1439,7 +1602,7 @@ void Funcionalidad::marcarInnodoLibre(SuperBloque block, FILE *file)
     }
 }
 
-Innodo Funcionalidad::nuevoInnodo()
+Innodo Funcionalidad::nuevoInnodo(char tipo)
 {
     Innodo in;
     time_t t = time(0);
@@ -1452,6 +1615,14 @@ Innodo Funcionalidad::nuevoInnodo()
 
     t = time(0);
     tiempo = ctime(&t);
+
+    for(int x = 0; x < 30; x++)
+    {
+        in.i_atime[x] = NULL;
+        in.i_ctime[x] = NULL;
+        in.i_mtime[x] = NULL;
+    }
+
     strcpy(in.i_atime,tiempo.c_str());
     strcpy(in.i_ctime,tiempo.c_str());
     strcpy(in.i_mtime,tiempo.c_str());
@@ -1460,7 +1631,7 @@ Innodo Funcionalidad::nuevoInnodo()
         in.i_block[x] = -1;
     }
 
-    in.i_type = 0;
+    in.i_type = tipo;
     in.i_perm = 700;
 
     return in;

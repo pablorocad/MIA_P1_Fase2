@@ -80,7 +80,7 @@ struct SuperBloque{
     int s_magic;
     int s_inode_size;
     int s_block_size;
-    int s_firts_ino;
+    int s_first_ino;
     int s_first_blo;
     int s_bm_inode_start;
     int s_bm_block_start;
@@ -142,10 +142,10 @@ public:
 
     void formatearParticion(QHash<QString,QString> par);
 
-    int buscarInnodo(QHash<QString,QString> par);//Metodo para buscar un innodo con un path
+    int buscarInnodo(QStringList pathAux);//Metodo para buscar un innodo con un path
     int buscarInnodo(int numInnodo, QStringList path,int posicionPath, SuperBloque block, FILE *file);
 
-    void crearCarpeta(int numInnodo,QString name);//Metodo de creacion de carpeta
+    void crearCarpeta(int numInnodoPadre,QString name,QStringList path);//Metodo de creacion de carpeta
 
     void Graficar(Nodo *temp);
     void Graficar(string padre, Nodo *temp, string &grafo, int &contador);
@@ -165,7 +165,10 @@ public:
     void marcarBloqueLIbre(SuperBloque block, FILE *file);
     void marcarInnodoLibre(SuperBloque block, FILE *file);
 
-    Innodo nuevoInnodo();
+    Innodo nuevoInnodo(char tipo);
+
+    void innodoTree(int padre, int actual, ofstream &out_, FILE *file, SuperBloque block);
+    void innodeBlock(int padre, int actual, ofstream out, FILE *file, SuperBloque block);
 
 
 private:
