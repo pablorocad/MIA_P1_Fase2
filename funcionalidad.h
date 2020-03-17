@@ -165,6 +165,8 @@ public:
     void marcarBloqueLIbre(SuperBloque block, FILE *file);
     void marcarInnodoLibre(SuperBloque block, FILE *file);
 
+    Innodo nuevoInnodo();
+
 
 private:
 
