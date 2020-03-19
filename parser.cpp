@@ -424,7 +424,7 @@ union yyalloc
 /* YYNNTS -- Number of nonterminals.  */
 #define YYNNTS  6
 /* YYNRULES -- Number of rules.  */
-#define YYNRULES  12
+#define YYNRULES  13
 /* YYNSTATES -- Number of states.  */
 #define YYNSTATES  18
 
@@ -474,7 +474,7 @@ static const yytype_uint8 yytranslate[] =
 static const yytype_uint8 yyrline[] =
 {
        0,    57,    57,    62,    67,    73,    80,    85,    90,    93,
-      96,    99,   102
+      96,    99,   102,   105
 };
 #endif
 
@@ -522,7 +522,7 @@ static const yytype_int8 yypact[] =
 static const yytype_uint8 yydefact[] =
 {
        0,     0,     0,     2,     4,     0,     5,     7,     1,     3,
-       0,     6,     0,    11,     9,    10,    12,     8
+      13,     6,     0,    11,     9,    10,    12,     8
 };
 
   /* YYPGOTO[NTERM-NUM].  */
@@ -564,14 +564,14 @@ static const yytype_uint8 yystos[] =
 static const yytype_uint8 yyr1[] =
 {
        0,    10,    11,    12,    12,    13,    14,    14,    15,    15,
-      15,    15,    15
+      15,    15,    15,    15
 };
 
   /* YYR2[YYN] -- Number of symbols on the right hand side of rule YYN.  */
 static const yytype_uint8 yyr2[] =
 {
        0,     2,     1,     2,     1,     2,     2,     1,     4,     4,
-       4,     4,     4
+       4,     4,     4,     2
 };
 
 
@@ -1434,13 +1434,20 @@ yyreduce:
 #line 102 "parser.y" /* yacc.c:1646  */
     {
                (yyval.nodo)=new Nodo((yylsp[-3]).first_line, (yylsp[-3]).first_column,(yyvsp[-2].TEXT),(yyvsp[0].TEXT));
-
            }
-#line 1440 "parser.cpp" /* yacc.c:1646  */
+#line 1439 "parser.cpp" /* yacc.c:1646  */
+    break;
+
+  case 13:
+#line 105 "parser.y" /* yacc.c:1646  */
+    {
+                (yyval.nodo)=new Nodo((yylsp[-1]).first_line, (yylsp[-1]).first_column,(yyvsp[0].TEXT),(yyvsp[0].TEXT));
+           }
+#line 1447 "parser.cpp" /* yacc.c:1646  */
     break;
 
 
-#line 1444 "parser.cpp" /* yacc.c:1646  */
+#line 1451 "parser.cpp" /* yacc.c:1646  */
       default: break;
     }
   /* User semantic actions sometimes alter yychar, and that requires

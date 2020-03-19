@@ -101,5 +101,7 @@ PARAMETRO: Tguion identificador Tigual identificador{
            }
            |Tguion identificador Tigual montar{
                $$=new Nodo(@1.first_line, @1.first_column,$2,$4);
-
+           }
+           |Tguion identificador{
+                $$=new Nodo(@1.first_line, @1.first_column,$2,$2);
            };

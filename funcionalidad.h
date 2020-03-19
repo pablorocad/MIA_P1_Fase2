@@ -142,6 +142,7 @@ public:
     int buscarInnodo(int numInnodo, QStringList path,int posicionPath, SuperBloque block, FILE *file);
 
     void crearCarpeta(int numInnodoPadre,QString name,QStringList path);//Metodo de creacion de carpeta
+    void crearArchivo(int numInnodoPadre,QString name,QStringList path, char contenido[64]);//Metodo de creacion de archivo
 
     void Graficar(Nodo *temp);
     void Graficar(string padre, Nodo *temp, string &grafo, int &contador);
