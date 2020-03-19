@@ -89,7 +89,6 @@ struct SuperBloque{
 };
 
 struct Innodo{
-    int id_innodo;
     int i_uid;
     int i_gid;
     int i_size;
@@ -116,17 +115,14 @@ struct Content{
 };
 
 struct BloqueCarpeta{
-    int id_bloque_carpeta;
     Content b_content[4];
 };
 
 struct BloqueArchivo{
-    int id_bloque_archivo;
     char b_content[64];
 };
 
 struct BloqueApuntador{
-    int id_bloque_apuntador;
   int b_pointers[16];
 };
 
@@ -167,8 +163,8 @@ public:
 
     Innodo nuevoInnodo(char tipo);
 
-    void innodoTree(int padre, int actual, ofstream &out_, FILE *file, SuperBloque block);
-    void innodeBlock(int padre, int actual, ofstream out, FILE *file, SuperBloque block);
+    void innodoTree(int padre, int actual, int posicion, ofstream &out, FILE *file, SuperBloque block);
+    void blockTree(int padre, int actual, int posicion, char tipo ,ofstream &out, FILE *file, SuperBloque block);
 
 
 private:
