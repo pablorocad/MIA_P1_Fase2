@@ -163,9 +163,10 @@ public:
     void marcarInnodoLibre(SuperBloque block, FILE *file);
 
     Innodo nuevoInnodo(char tipo);
+    BloqueApuntador nuevoApuntador();
 
     void innodoTree(int padre, int actual, int posicion, ofstream &out, FILE *file, SuperBloque block);
-    void blockTree(int padre, int actual, int posicion, char tipo ,ofstream &out, FILE *file, SuperBloque block);
+    void blockTree(int padre, int actual, int posicion, char tipo ,ofstream &out, FILE *file, SuperBloque block,bool esAp);
 
 
 private:

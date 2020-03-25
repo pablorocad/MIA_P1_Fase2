@@ -1226,7 +1226,7 @@ void Funcionalidad::innodoTree(int padre, int actual, int posicion, ofstream &ou
     out << "| {i_type | " << innodo.i_type << "}";
     out << "| {i_perm | " << innodo.i_perm << "}";
 
-    for(int x = 0; x < 12; x++)
+    for(int x = 0; x < 15; x++)
     {
         if(innodo.i_block[x] == -1)
         {
@@ -1251,12 +1251,28 @@ void Funcionalidad::innodoTree(int padre, int actual, int posicion, ofstream &ou
     {
         if(innodo.i_block[x] != -1)
         {
-            blockTree(actual,innodo.i_block[x],x, innodo.i_type, out,file,block);
+            blockTree(actual,innodo.i_block[x],x, innodo.i_type, out,file,block,false);
         }
     }
+
+    if(innodo.i_block[12] != -1)
+    {
+        blockTree(actual,innodo.i_block[12],12, '2', out,file,block,false);
+    }
+
+    if(innodo.i_block[13] != -1)
+    {
+        blockTree(actual,innodo.i_block[13],13, '3', out,file,block,false);
+    }
+
+    if(innodo.i_block[14] != -1)
+    {
+        blockTree(actual,innodo.i_block[14],14, '4', out,file,block,false);
+    }
+
 }
 
-void Funcionalidad::blockTree(int padre, int actual, int posicion, char tipo, ofstream &out, FILE *file, SuperBloque block)
+void Funcionalidad::blockTree(int padre, int actual, int posicion, char tipo, ofstream &out, FILE *file, SuperBloque block, bool esAp)
 {
     fseek(file,block.s_block_start,SEEK_SET);
     fseek(file,actual*block.s_block_size,SEEK_CUR);
@@ -1277,28 +1293,44 @@ void Funcionalidad::blockTree(int padre, int actual, int posicion, char tipo, of
         out << "\n";
 
         //conectamos el inodo con el bloque-------------------------------------------------------------
-        out << "innode_" << padre << ":i" << padre << "ad" << posicion << " -> " << "block_" << actual << ";";
-        out << "\n";
-
-        for(int x = 0; x < 4; x++)
+        if(!esAp)
         {
-            if(posicion == 0)
+            out << "innode_" << padre << ":i" << padre << "ad" << posicion << " -> " << "block_" << actual << ";";
+            out << "\n";
+
+            for(int x = 0; x < 4; x++)
             {
-                if(x >= 2){
+                if(posicion == 0)
+                {
+                    if(x >= 2){
+                        if(carpeta.b_content[x].b_innodo != -1)
+                        {
+                            innodoTree(actual,carpeta.b_content[x].b_innodo,x,out,file,block);
+                        }
+                    }
+                }
+                else {
                     if(carpeta.b_content[x].b_innodo != -1)
                     {
                         innodoTree(actual,carpeta.b_content[x].b_innodo,x,out,file,block);
                     }
                 }
             }
-            else {
+
+        }
+        else
+        {
+            out << "block_" << padre << ":b" << padre << "p" << posicion << " -> " << "block_" << actual << ";";
+            out << "\n";
+
+            for(int x = 0; x < 4; x++)
+            {
                 if(carpeta.b_content[x].b_innodo != -1)
                 {
                     innodoTree(actual,carpeta.b_content[x].b_innodo,x,out,file,block);
                 }
             }
         }
-
     }
     else if (tipo == '1')
     {
@@ -1322,8 +1354,78 @@ void Funcionalidad::blockTree(int padre, int actual, int posicion, char tipo, of
         out << "\n";
 
         //conectamos el inodo con el bloque-------------------------------------------------------------
+        if(!esAp)
+        {
+            out << "innode_" << padre << ":i" << padre << "ad" << posicion << " -> " << "block_" << actual << ";";
+        }
+        else
+        {
+            out << "block_" << padre << ":b" << padre << "p" << posicion << " -> " << "block_" << actual << ";";
+        }
+        out << "\n";
+    }
+    else if (tipo == '2')
+    {
+        BloqueApuntador apuntador;
+        fread(&apuntador,block.s_block_size,1,file);
+
+        out << "block_" << actual;
+        out << " [fillcolor=coral,style=\"filled,bold\",shape=record, label=\"Bloque_" << actual << " ";
+
+        for(int x = 0; x < 16; x++)
+        {
+            out << "| {"  <<" <b"<< actual << "p" << x << "> " << apuntador.b_pointers[x] << "}";
+        }
+
+        out << "\"];";
+        out << "\n";
+
+        //conectamos el inodo con el bloque-------------------------------------------------------------
+        if(!esAp)
+        {
+            out << "innode_" << padre << ":i" << padre << "ad" << posicion << " -> " << "block_" << actual << ";";
+        }
+        else
+        {
+            out << "block_" << padre << ":b" << padre << "p" << posicion << " -> " << "block_" << actual << ";";
+        }
+        out << "\n";
+
+        for(int x = 0; x < 16; x++)
+        {
+            if(apuntador.b_pointers[x] != -1)
+            {
+                blockTree(actual,apuntador.b_pointers[x],x,'0',out,file,block,true);
+            }
+        }
+    }
+    else if (tipo == '3')
+    {
+        BloqueApuntador apuntador;
+        fread(&apuntador,block.s_block_size,1,file);
+
+        out << "block_" << actual;
+        out << " [fillcolor=coral,style=\"filled,bold\",shape=record, label=\"Bloque_" << actual << " ";
+
+        for(int x = 0; x < 16; x++)
+        {
+            out << "| {"  <<" <b"<< actual << "p" << x << "> " << apuntador.b_pointers[x] << "}";
+        }
+
+        out << "\"];";
+        out << "\n";
+
+        //conectamos el inodo con el bloque-------------------------------------------------------------
         out << "innode_" << padre << ":i" << padre << "ad" << posicion << " -> " << "block_" << actual << ";";
         out << "\n";
+
+        for(int x = 0; x < 16; x++)
+        {
+            if(apuntador.b_pointers[x] != -1)
+            {
+                blockTree(actual,apuntador.b_pointers[x],x,'2',out,file,block,true);
+            }
+        }
     }
 }
 
@@ -1704,10 +1806,113 @@ int Funcionalidad::buscarInnodo(int numInnodo, QStringList path,int posicionPath
                             }
                         }
                     }
-
             }
         }
 
+        if(numRetorno == -1 && innodo.i_block[12] != -1)//Bloque de apuntadores simple
+        {
+            BloqueApuntador apuntador;
+            int numAp = innodo.i_block[12];
+            fseek(file,block.s_block_start,SEEK_SET);//inicio del area bloques
+            fseek(file, numAp*block.s_block_size,SEEK_CUR);// nos movemos al bloque
+            fread(&apuntador,block.s_block_size,1,file);
+
+            for(int x = 0; x < 16; x++)
+            {
+                if(apuntador.b_pointers[x] != -1)
+                {
+                    int numCarpeta = apuntador.b_pointers[x];
+                    fseek(file,block.s_block_start,SEEK_SET);//inicio del area bloques
+                    fseek(file, numCarpeta*block.s_block_size,SEEK_CUR);// nos movemos al bloque
+
+                        BloqueCarpeta carpeta;
+                        fread(&carpeta,block.s_block_size,1,file);//leemos el bloque
+
+                        for(int y = 0; y < 4; y++)
+                        {
+
+                            QString name = "";
+                            for(char c : carpeta.b_content[y].b_name)
+                            {
+                                if(c != NULL)
+                                {
+                                name.append(c);
+                                }
+                            }
+
+                            if(name == path.value(posicionPath))//si la carpeta contiene lo que buscamos
+                            {
+                                posicionPath++;
+                                numRetorno = buscarInnodo(carpeta.b_content[y].b_innodo,path,posicionPath,block,file);
+
+                                if(numRetorno != -1)//si ya encontramos el innodo retornamos el numero
+                                {
+                                    return numRetorno;
+                                }
+                            }
+                        }
+                }
+            }
+
+        }
+
+        if(numRetorno == -1 && innodo.i_block[13] != -1)
+        {
+            BloqueApuntador apuntadorDoble;
+            int numApDoble = innodo.i_block[13];
+            fseek(file,block.s_block_start,SEEK_SET);//inicio del area bloques
+            fseek(file, numApDoble*block.s_block_size,SEEK_CUR);// nos movemos al bloque
+            fread(&apuntadorDoble,block.s_block_size,1,file);
+
+            for(int posD = 0; posD < 16; posD++)
+            {
+                if(apuntadorDoble.b_pointers[posD] != -1)
+                {
+                    BloqueApuntador apuntador;
+                    int numAp = apuntadorDoble.b_pointers[posD];
+                    fseek(file,block.s_block_start,SEEK_SET);//inicio del area bloques
+                    fseek(file, numAp*block.s_block_size,SEEK_CUR);// nos movemos al bloque
+                    fread(&apuntador,block.s_block_size,1,file);
+
+                    for(int x = 0; x < 16; x++)
+                    {
+                        if(apuntador.b_pointers[x] != -1)
+                        {
+                            int numCarpeta = apuntador.b_pointers[x];
+                            fseek(file,block.s_block_start,SEEK_SET);//inicio del area bloques
+                            fseek(file, numCarpeta*block.s_block_size,SEEK_CUR);// nos movemos al bloque
+
+                                BloqueCarpeta carpeta;
+                                fread(&carpeta,block.s_block_size,1,file);//leemos el bloque
+
+                                for(int y = 0; y < 4; y++)
+                                {
+
+                                    QString name = "";
+                                    for(char c : carpeta.b_content[y].b_name)
+                                    {
+                                        if(c != NULL)
+                                        {
+                                        name.append(c);
+                                        }
+                                    }
+
+                                    if(name == path.value(posicionPath))//si la carpeta contiene lo que buscamos
+                                    {
+                                        posicionPath++;
+                                        numRetorno = buscarInnodo(carpeta.b_content[y].b_innodo,path,posicionPath,block,file);
+
+                                        if(numRetorno != -1)//si ya encontramos el innodo retornamos el numero
+                                        {
+                                            return numRetorno;
+                                        }
+                                    }
+                                }
+                        }
+                    }
+                }
+            }
+        }
     }
     else{
         return numInnodo;
@@ -1976,7 +2181,774 @@ void Funcionalidad::crearCarpeta(int numInnodoPadre, QString name, QStringList p
 
     if(indirecto)
     {
+        bool inDoble = true;
+        bool inTriple = true;
 
+        if(innodo.i_block[12] != -1)//Bloque simple directo
+        {
+            BloqueApuntador apuntador;
+            fseek(file,block.s_block_start,SEEK_SET);
+            fseek(file,innodo.i_block[12]*block.s_block_size,SEEK_CUR);
+            fread(&apuntador,block.s_block_size,1,file);
+
+            for(int x = 0; x < 16; x++)
+            {
+                if(apuntador.b_pointers[x] != -1)
+                {
+
+                    BloqueCarpeta carpeta;
+                    fseek(file,block.s_block_start,SEEK_SET);
+                    fseek(file,apuntador.b_pointers[x]*block.s_block_size,SEEK_CUR);
+                    fread(&carpeta,block.s_block_size,1,file);//
+
+                    for(int y = 0; y < 4; y++)
+                    {
+                        if(carpeta.b_content[y].b_innodo == -1)//si hay espacio en el bloque
+                        {
+                            inDoble = false;
+                            inTriple = false;
+
+                            int nInnodo = block.s_first_ino;//primer innodo libre
+                            marcarInnodoLibre(block,file);//marcamos que se uso
+                            block.s_first_ino = primerInnodoLibre(block,file);//guardamos el nuevo innodo libre
+                            block.s_free_inodes_count--;
+
+                            carpeta.b_content[y].b_innodo = nInnodo;
+                            string n = name.toStdString();
+
+                            for(int g = 0; g < 12; g++)
+                            {
+                                carpeta.b_content[y].b_name[g] = NULL;
+                            }
+                            for(int z = 0; z < n.size(); z++)
+                            {
+                                carpeta.b_content[y].b_name[z] = n[z];
+                            }
+
+                            Innodo nuevo = nuevoInnodo('0');
+
+                            //creamos el primer bloque con padre y actual-------------------------------------------------------
+                            nuevo.i_block[0] = block.s_first_blo;
+                            marcarBloqueLIbre(block,file);
+                            block.s_first_blo = primerBloqueLIbre(block,file);
+                            block.s_free_blocks_count--;
+
+                            BloqueCarpeta carpetaNueva;
+                            for(int g = 0; g < 12; g++)
+                            {
+                                carpetaNueva.b_content[0].b_name[g] = NULL;
+                                carpetaNueva.b_content[1].b_name[g] = NULL;
+                                carpetaNueva.b_content[2].b_name[g] = NULL;
+                                carpetaNueva.b_content[3].b_name[g] = NULL;
+                            }
+
+                            int actual,padre;
+
+                            if(path.size() <= 1)
+                            {
+                                actual = 0;
+                                padre = 0;
+                            }
+                            else
+                            {
+                                actual = buscarInnodo(path);
+                                path.removeLast();
+                                padre = buscarInnodo(path);
+                            }
+
+                            carpetaNueva.b_content[0].b_name[0] = '.';
+                            carpetaNueva.b_content[0].b_innodo = actual;
+
+                            carpetaNueva.b_content[1].b_name[0] = '.';
+                            carpetaNueva.b_content[1].b_name[1] = '.';
+                            carpetaNueva.b_content[1].b_innodo = padre;//padre
+
+                            fseek(file,block.s_block_start,SEEK_SET);
+                            fseek(file,nuevo.i_block[0]*block.s_block_size,SEEK_CUR);
+                            fwrite(&carpetaNueva,block.s_block_size,1,file);
+                            //--------------------------------------------------------------------------------------------------
+
+                            fseek(file,block.s_inode_start,SEEK_SET);
+                            fseek(file,nInnodo*block.s_inode_size,SEEK_CUR);
+                            fwrite(&nuevo,block.s_inode_size,1,file);//escribimos el nuevo innodo
+
+                            fseek(file,block.s_block_start,SEEK_SET);
+                            fseek(file,apuntador.b_pointers[x]*block.s_block_size,SEEK_CUR);
+                            fwrite(&carpeta,block.s_block_size,1,file);//escribimos el bloque carpeta actualizada
+
+                            fseek(file,usuario.particion.part_start,SEEK_SET);
+                            fwrite(&block,sizeof(struct SuperBloque),1,file);
+                            fclose(file);
+                            return;
+                        }
+                    }
+                }
+                else if(apuntador.b_pointers[x] == -1 && espacioDisponible == -1){
+                    espacioDisponible = x;
+                    inDoble = false;
+                    inTriple = false;
+                }
+            }
+
+            if(espacioDisponible != -1)
+            {
+                //creamos un bloque carpeta-----------------------------------------------------------
+               BloqueCarpeta carpeta;
+               fseek(file,block.s_block_start,SEEK_SET);
+               int numBloque = block.s_first_blo;
+               marcarBloqueLIbre(block,file);
+               block.s_first_blo = primerBloqueLIbre(block, file);
+               block.s_free_blocks_count--;
+
+                for(int g = 0; g < 12; g++)
+                {
+                    carpeta.b_content[0].b_name[g] = NULL;
+                    carpeta.b_content[1].b_name[g] = NULL;
+                    carpeta.b_content[2].b_name[g] = NULL;
+                    carpeta.b_content[3].b_name[g] = NULL;
+                }
+                //-----------------------------------------------------------------------------------
+
+                //marcamos que usamos un bloque------------------------------------------------------
+                apuntador.b_pointers[espacioDisponible] = numBloque;
+                //-----------------------------------------------------------------------------------
+                //insertamos el nuevo innodo---------------------------------------------------------
+                int nInnodo = block.s_first_ino;//primer innodo libre
+                marcarInnodoLibre(block,file);//marcamos que se uso
+                block.s_first_ino = primerInnodoLibre(block,file);//guardamos el nuevo innodo libre
+                block.s_free_inodes_count--;
+
+                carpeta.b_content[0].b_innodo = nInnodo;
+                string n = name.toStdString();
+                for(int z = 0; z < n.size(); z++)
+                {
+                    carpeta.b_content[0].b_name[z] = n[z];
+                }
+
+                Innodo nuevo = nuevoInnodo('0');
+
+                //------------------------------------------------------------------------------------------
+                nuevo.i_block[0] = block.s_first_blo;
+                marcarBloqueLIbre(block,file);
+                block.s_first_blo = primerBloqueLIbre(block,file);
+                block.s_free_blocks_count--;
+
+                BloqueCarpeta carpetaNueva;
+                for(int g = 0; g < 12; g++)
+                {
+                    carpetaNueva.b_content[0].b_name[g] = NULL;
+                    carpetaNueva.b_content[1].b_name[g] = NULL;
+                    carpetaNueva.b_content[2].b_name[g] = NULL;
+                    carpetaNueva.b_content[3].b_name[g] = NULL;
+                }
+
+                int actual,padre;
+
+                if(path.size() <= 1)
+                {
+                    actual = 0;
+                    padre = 0;
+                }
+                else
+                {
+                    actual = buscarInnodo(path);
+                    path.removeLast();
+                    padre = buscarInnodo(path);
+                }
+
+                carpetaNueva.b_content[0].b_name[0] = '.';
+                carpetaNueva.b_content[0].b_innodo = actual;
+
+                carpetaNueva.b_content[1].b_name[0] = '.';
+                carpetaNueva.b_content[1].b_name[1] = '.';
+                carpetaNueva.b_content[1].b_innodo = padre;//padre
+
+                fseek(file,block.s_block_start,SEEK_SET);
+                fseek(file,nuevo.i_block[0]*block.s_block_size,SEEK_CUR);
+                fwrite(&carpetaNueva,block.s_block_size,1,file);
+                //------------------------------------------------------------------------------------------
+
+                fseek(file,block.s_block_start,SEEK_SET);
+                fseek(file,innodo.i_block[12]*block.s_block_size,SEEK_CUR);
+                fwrite(&apuntador,block.s_block_size,1,file);//escribimos el innodo actualizado
+
+                fseek(file,block.s_inode_start,SEEK_SET);
+                fseek(file,nInnodo*block.s_inode_size,SEEK_CUR);
+                fwrite(&nuevo,block.s_inode_size,1,file);//escribimos el nuevo innodo
+
+                fseek(file,block.s_block_start,SEEK_SET);
+                fseek(file,numBloque*block.s_block_size,SEEK_CUR);
+                fwrite(&carpeta,block.s_block_size,1,file);//escribimos el bloque carpeta actualizada
+
+                fseek(file,usuario.particion.part_start,SEEK_SET);
+                fwrite(&block,sizeof(struct SuperBloque),1,file);
+                //-------------------------------------------------------------------------------------
+                fclose(file);
+                return;
+            }
+
+        }
+        else {
+            inDoble = false;
+            inTriple = false;
+            //Apuntador---------------------------------------------------------------------------
+            BloqueApuntador apuntador = nuevoApuntador();//nuestro bloque de apuntadores simple
+            int numBloqueApuntador = block.s_first_blo;
+            marcarBloqueLIbre(block,file);
+            block.s_first_blo = primerBloqueLIbre(block, file);
+            block.s_free_blocks_count--;
+
+            innodo.i_block[12] = numBloqueApuntador;
+
+            //Carpeta-----------------------------------------------------------------------------
+            BloqueCarpeta carpeta;
+            int numBloque = block.s_first_blo;
+            marcarBloqueLIbre(block,file);
+            block.s_first_blo = primerBloqueLIbre(block, file);
+            block.s_free_blocks_count--;
+
+            apuntador.b_pointers[0] = numBloque;
+
+            for(int g = 0; g < 12; g++)
+            {
+                carpeta.b_content[0].b_name[g] = NULL;
+                carpeta.b_content[1].b_name[g] = NULL;
+                carpeta.b_content[2].b_name[g] = NULL;
+                carpeta.b_content[3].b_name[g] = NULL;
+            }
+
+            //insertamos el nuevo innodo---------------------------------------------------------
+            int nInnodo = block.s_first_ino;//primer innodo libre
+            marcarInnodoLibre(block,file);//marcamos que se uso
+            block.s_first_ino = primerInnodoLibre(block,file);//guardamos el nuevo innodo libre
+            block.s_free_inodes_count--;
+
+            carpeta.b_content[0].b_innodo = nInnodo;
+            string n = name.toStdString();
+            for(int z = 0; z < n.size(); z++)
+            {
+                carpeta.b_content[0].b_name[z] = n[z];
+            }
+
+            Innodo nuevo = nuevoInnodo('0');
+
+            //------------------------------------------------------------------------------------------
+            nuevo.i_block[0] = block.s_first_blo;
+            marcarBloqueLIbre(block,file);
+            block.s_first_blo = primerBloqueLIbre(block,file);
+            block.s_free_blocks_count--;
+
+            BloqueCarpeta carpetaNueva;
+            for(int g = 0; g < 12; g++)
+            {
+                carpetaNueva.b_content[0].b_name[g] = NULL;
+                carpetaNueva.b_content[1].b_name[g] = NULL;
+                carpetaNueva.b_content[2].b_name[g] = NULL;
+                carpetaNueva.b_content[3].b_name[g] = NULL;
+            }
+
+            int actual,padre;
+
+            if(path.size() <= 1)
+            {
+                actual = 0;
+                padre = 0;
+            }
+            else
+            {
+                actual = buscarInnodo(path);
+                path.removeLast();
+                padre = buscarInnodo(path);
+            }
+
+            carpetaNueva.b_content[0].b_name[0] = '.';
+            carpetaNueva.b_content[0].b_innodo = actual;
+
+            carpetaNueva.b_content[1].b_name[0] = '.';
+            carpetaNueva.b_content[1].b_name[1] = '.';
+            carpetaNueva.b_content[1].b_innodo = padre;//padre
+
+            fseek(file,block.s_block_start,SEEK_SET);
+            fseek(file,nuevo.i_block[0]*block.s_block_size,SEEK_CUR);
+            fwrite(&carpetaNueva,block.s_block_size,1,file);
+            //------------------------------------------------------------------------------------------
+
+            fseek(file,block.s_block_start,SEEK_SET);
+            fseek(file,numBloqueApuntador*block.s_block_size,SEEK_CUR);
+            fwrite(&apuntador,block.s_block_size,1,file);
+
+            fseek(file,block.s_inode_start,SEEK_SET);
+            fseek(file,numInnodoPadre*block.s_inode_size,SEEK_CUR);
+            fwrite(&innodo,block.s_inode_size,1,file);//escribimos el innodo actualizado
+
+            fseek(file,block.s_inode_start,SEEK_SET);
+            fseek(file,nInnodo*block.s_inode_size,SEEK_CUR);
+            fwrite(&nuevo,block.s_inode_size,1,file);//escribimos el nuevo innodo
+
+            fseek(file,block.s_block_start,SEEK_SET);
+            fseek(file,numBloque*block.s_block_size,SEEK_CUR);
+            fwrite(&carpeta,block.s_block_size,1,file);//escribimos el bloque carpeta actualizada
+
+            fseek(file,usuario.particion.part_start,SEEK_SET);
+            fwrite(&block,sizeof(struct SuperBloque),1,file);
+            //-------------------------------------------------------------------------------------
+            fclose(file);
+            return;
+        }
+
+        if(innodo.i_block[13] != -1 && inDoble)
+        {
+            BloqueApuntador apuntadorDoble;
+            fseek(file,block.s_block_start,SEEK_SET);
+            fseek(file,innodo.i_block[13]*block.s_block_size,SEEK_CUR);
+            fread(&apuntadorDoble,block.s_block_size,1,file);
+
+            for(int posD = 0; posD < 16; posD++)
+            {
+                if(apuntadorDoble.b_pointers[posD] != -1)//apuntador doble contiene algo
+                {
+                    BloqueApuntador apuntador;
+                    fseek(file,block.s_block_start,SEEK_SET);
+                    fseek(file,apuntadorDoble.b_pointers[posD]*block.s_block_size,SEEK_CUR);
+                    fread(&apuntador,block.s_block_size,1,file);
+
+                    for(int x = 0; x < 16; x++)
+                    {
+                        if(apuntador.b_pointers[x] != -1)
+                        {
+                            BloqueCarpeta carpeta;
+                            fseek(file,block.s_block_start,SEEK_SET);
+                            fseek(file,apuntador.b_pointers[x]*block.s_block_size,SEEK_CUR);
+                            fread(&carpeta,block.s_block_size,1,file);//
+
+                            for(int y = 0; y < 4; y++)
+                            {
+                                if(carpeta.b_content[y].b_innodo == -1)//si hay espacio en el bloque
+                                {
+                                    inTriple = false;
+
+                                    int nInnodo = block.s_first_ino;//primer innodo libre
+                                    marcarInnodoLibre(block,file);//marcamos que se uso
+                                    block.s_first_ino = primerInnodoLibre(block,file);//guardamos el nuevo innodo libre
+                                    block.s_free_inodes_count--;
+
+                                    carpeta.b_content[y].b_innodo = nInnodo;
+                                    string n = name.toStdString();
+
+                                    for(int g = 0; g < 12; g++)
+                                    {
+                                        carpeta.b_content[y].b_name[g] = NULL;
+                                    }
+                                    for(int z = 0; z < n.size(); z++)
+                                    {
+                                        carpeta.b_content[y].b_name[z] = n[z];
+                                    }
+
+                                    Innodo nuevo = nuevoInnodo('0');
+
+                                    //creamos el primer bloque con padre y actual-------------------------------------------------------
+                                    nuevo.i_block[0] = block.s_first_blo;
+                                    marcarBloqueLIbre(block,file);
+                                    block.s_first_blo = primerBloqueLIbre(block,file);
+                                    block.s_free_blocks_count--;
+
+                                    BloqueCarpeta carpetaNueva;
+                                    for(int g = 0; g < 12; g++)
+                                    {
+                                        carpetaNueva.b_content[0].b_name[g] = NULL;
+                                        carpetaNueva.b_content[1].b_name[g] = NULL;
+                                        carpetaNueva.b_content[2].b_name[g] = NULL;
+                                        carpetaNueva.b_content[3].b_name[g] = NULL;
+                                    }
+
+                                    int actual,padre;
+
+                                    if(path.size() <= 1)
+                                    {
+                                        actual = 0;
+                                        padre = 0;
+                                    }
+                                    else
+                                    {
+                                        actual = buscarInnodo(path);
+                                        path.removeLast();
+                                        padre = buscarInnodo(path);
+                                    }
+
+                                    carpetaNueva.b_content[0].b_name[0] = '.';
+                                    carpetaNueva.b_content[0].b_innodo = actual;
+
+                                    carpetaNueva.b_content[1].b_name[0] = '.';
+                                    carpetaNueva.b_content[1].b_name[1] = '.';
+                                    carpetaNueva.b_content[1].b_innodo = padre;//padre
+
+                                    fseek(file,block.s_block_start,SEEK_SET);
+                                    fseek(file,nuevo.i_block[0]*block.s_block_size,SEEK_CUR);
+                                    fwrite(&carpetaNueva,block.s_block_size,1,file);
+                                    //--------------------------------------------------------------------------------------------------
+
+                                    fseek(file,block.s_inode_start,SEEK_SET);
+                                    fseek(file,nInnodo*block.s_inode_size,SEEK_CUR);
+                                    fwrite(&nuevo,block.s_inode_size,1,file);//escribimos el nuevo innodo
+
+                                    fseek(file,block.s_block_start,SEEK_SET);
+                                    fseek(file,apuntador.b_pointers[x]*block.s_block_size,SEEK_CUR);
+                                    fwrite(&carpeta,block.s_block_size,1,file);//escribimos el bloque carpeta actualizada
+
+                                    fseek(file,usuario.particion.part_start,SEEK_SET);
+                                    fwrite(&block,sizeof(struct SuperBloque),1,file);
+                                    fclose(file);
+                                    return;
+                                }
+                            }
+                        }
+                        else if(apuntador.b_pointers[x] == -1 && espacioDisponible == -1){
+                            espacioDisponible = x;
+                            inDoble = false;
+                            inTriple = false;
+                        }
+                    }
+
+                    if(espacioDisponible != -1)
+                    {
+                        //creamos un bloque carpeta-----------------------------------------------------------
+                       BloqueCarpeta carpeta;
+                       fseek(file,block.s_block_start,SEEK_SET);
+                       int numBloqueCarpeta = block.s_first_blo;
+                       marcarBloqueLIbre(block,file);
+                       block.s_first_blo = primerBloqueLIbre(block, file);
+                       block.s_free_blocks_count--;
+
+                        for(int g = 0; g < 12; g++)
+                        {
+                            carpeta.b_content[0].b_name[g] = NULL;
+                            carpeta.b_content[1].b_name[g] = NULL;
+                            carpeta.b_content[2].b_name[g] = NULL;
+                            carpeta.b_content[3].b_name[g] = NULL;
+                        }
+                        //-----------------------------------------------------------------------------------
+
+                        //marcamos que usamos un bloque------------------------------------------------------
+                        apuntador.b_pointers[espacioDisponible] = numBloqueCarpeta;
+                        //-----------------------------------------------------------------------------------
+                        //insertamos el nuevo innodo---------------------------------------------------------
+                        int nInnodo = block.s_first_ino;//primer innodo libre
+                        marcarInnodoLibre(block,file);//marcamos que se uso
+                        block.s_first_ino = primerInnodoLibre(block,file);//guardamos el nuevo innodo libre
+                        block.s_free_inodes_count--;
+
+                        carpeta.b_content[0].b_innodo = nInnodo;
+                        string n = name.toStdString();
+                        for(int z = 0; z < n.size(); z++)
+                        {
+                            carpeta.b_content[0].b_name[z] = n[z];
+                        }
+
+                        Innodo nuevo = nuevoInnodo('0');
+
+                        //------------------------------------------------------------------------------------------
+                        nuevo.i_block[0] = block.s_first_blo;
+                        marcarBloqueLIbre(block,file);
+                        block.s_first_blo = primerBloqueLIbre(block,file);
+                        block.s_free_blocks_count--;
+
+                        BloqueCarpeta carpetaNueva;
+                        for(int g = 0; g < 12; g++)
+                        {
+                            carpetaNueva.b_content[0].b_name[g] = NULL;
+                            carpetaNueva.b_content[1].b_name[g] = NULL;
+                            carpetaNueva.b_content[2].b_name[g] = NULL;
+                            carpetaNueva.b_content[3].b_name[g] = NULL;
+                        }
+
+                        int actual,padre;
+
+                        if(path.size() <= 1)
+                        {
+                            actual = 0;
+                            padre = 0;
+                        }
+                        else
+                        {
+                            actual = buscarInnodo(path);
+                            path.removeLast();
+                            padre = buscarInnodo(path);
+                        }
+
+                        carpetaNueva.b_content[0].b_name[0] = '.';
+                        carpetaNueva.b_content[0].b_innodo = actual;
+
+                        carpetaNueva.b_content[1].b_name[0] = '.';
+                        carpetaNueva.b_content[1].b_name[1] = '.';
+                        carpetaNueva.b_content[1].b_innodo = padre;//padre
+
+                        fseek(file,block.s_block_start,SEEK_SET);
+                        fseek(file,nuevo.i_block[0]*block.s_block_size,SEEK_CUR);
+                        fwrite(&carpetaNueva,block.s_block_size,1,file);
+                        //------------------------------------------------------------------------------------------
+
+                        fseek(file,block.s_block_start,SEEK_SET);
+                        fseek(file,apuntadorDoble.b_pointers[posD]*block.s_block_size,SEEK_CUR);
+                        fwrite(&apuntador,block.s_block_size,1,file);//escribimos el innodo actualizado
+
+                        fseek(file,block.s_inode_start,SEEK_SET);
+                        fseek(file,nInnodo*block.s_inode_size,SEEK_CUR);
+                        fwrite(&nuevo,block.s_inode_size,1,file);//escribimos el nuevo innodo
+
+                        fseek(file,block.s_block_start,SEEK_SET);
+                        fseek(file,numBloqueCarpeta*block.s_block_size,SEEK_CUR);
+                        fwrite(&carpeta,block.s_block_size,1,file);//escribimos el bloque carpeta actualizada
+
+                        fseek(file,usuario.particion.part_start,SEEK_SET);
+                        fwrite(&block,sizeof(struct SuperBloque),1,file);
+                        //-------------------------------------------------------------------------------------
+                        fclose(file);
+                        return;
+                    }
+                }
+                else if(apuntadorDoble.b_pointers[posD] == -1 && espacioDisponible == -1){
+                    espacioDisponible = posD;
+                    inDoble = false;
+                    inTriple = false;
+                }
+            }
+
+            if(espacioDisponible != -1)
+            {
+                BloqueApuntador apuntador = nuevoApuntador();//nuestro bloque de apuntadores simple
+                int numBloqueApuntador = block.s_first_blo;
+                marcarBloqueLIbre(block,file);
+                block.s_first_blo = primerBloqueLIbre(block, file);
+                block.s_free_blocks_count--;
+
+                apuntadorDoble.b_pointers[espacioDisponible] = numBloqueApuntador;
+
+                //creamos un bloque carpeta-----------------------------------------------------------
+               BloqueCarpeta carpeta;
+               fseek(file,block.s_block_start,SEEK_SET);
+               int numBloque = block.s_first_blo;
+               marcarBloqueLIbre(block,file);
+               block.s_first_blo = primerBloqueLIbre(block, file);
+               block.s_free_blocks_count--;
+
+                for(int g = 0; g < 12; g++)
+                {
+                    carpeta.b_content[0].b_name[g] = NULL;
+                    carpeta.b_content[1].b_name[g] = NULL;
+                    carpeta.b_content[2].b_name[g] = NULL;
+                    carpeta.b_content[3].b_name[g] = NULL;
+                }
+                //-----------------------------------------------------------------------------------
+
+                //marcamos que usamos un bloque------------------------------------------------------
+                apuntador.b_pointers[0] = numBloque;
+                //-----------------------------------------------------------------------------------
+                //insertamos el nuevo innodo---------------------------------------------------------
+                int nInnodo = block.s_first_ino;//primer innodo libre
+                marcarInnodoLibre(block,file);//marcamos que se uso
+                block.s_first_ino = primerInnodoLibre(block,file);//guardamos el nuevo innodo libre
+                block.s_free_inodes_count--;
+
+                carpeta.b_content[0].b_innodo = nInnodo;
+                string n = name.toStdString();
+                for(int z = 0; z < n.size(); z++)
+                {
+                    carpeta.b_content[0].b_name[z] = n[z];
+                }
+
+                Innodo nuevo = nuevoInnodo('0');
+
+                //------------------------------------------------------------------------------------------
+                nuevo.i_block[0] = block.s_first_blo;
+                marcarBloqueLIbre(block,file);
+                block.s_first_blo = primerBloqueLIbre(block,file);
+                block.s_free_blocks_count--;
+
+                BloqueCarpeta carpetaNueva;
+                for(int g = 0; g < 12; g++)
+                {
+                    carpetaNueva.b_content[0].b_name[g] = NULL;
+                    carpetaNueva.b_content[1].b_name[g] = NULL;
+                    carpetaNueva.b_content[2].b_name[g] = NULL;
+                    carpetaNueva.b_content[3].b_name[g] = NULL;
+                }
+
+                int actual,padre;
+
+                if(path.size() <= 1)
+                {
+                    actual = 0;
+                    padre = 0;
+                }
+                else
+                {
+                    actual = buscarInnodo(path);
+                    path.removeLast();
+                    padre = buscarInnodo(path);
+                }
+
+                carpetaNueva.b_content[0].b_name[0] = '.';
+                carpetaNueva.b_content[0].b_innodo = actual;
+
+                carpetaNueva.b_content[1].b_name[0] = '.';
+                carpetaNueva.b_content[1].b_name[1] = '.';
+                carpetaNueva.b_content[1].b_innodo = padre;//padre
+
+                fseek(file,block.s_block_start,SEEK_SET);
+                fseek(file,nuevo.i_block[0]*block.s_block_size,SEEK_CUR);
+                fwrite(&carpetaNueva,block.s_block_size,1,file);
+                //------------------------------------------------------------------------------------------
+
+                fseek(file,block.s_block_start,SEEK_SET);
+                fseek(file,innodo.i_block[13]*block.s_block_size,SEEK_CUR);
+                fwrite(&apuntadorDoble,block.s_block_size,1,file);//escribimos el apuntador actualizado
+
+                fseek(file,block.s_block_start,SEEK_SET);
+                fseek(file,numBloqueApuntador*block.s_block_size,SEEK_CUR);
+                fwrite(&apuntador,block.s_block_size,1,file);//escribimos el apuntador actualizado
+
+                fseek(file,block.s_inode_start,SEEK_SET);
+                fseek(file,nInnodo*block.s_inode_size,SEEK_CUR);
+                fwrite(&nuevo,block.s_inode_size,1,file);//escribimos el nuevo innodo
+
+                fseek(file,block.s_block_start,SEEK_SET);
+                fseek(file,numBloque*block.s_block_size,SEEK_CUR);
+                fwrite(&carpeta,block.s_block_size,1,file);//escribimos el bloque carpeta actualizada
+
+                fseek(file,usuario.particion.part_start,SEEK_SET);
+                fwrite(&block,sizeof(struct SuperBloque),1,file);
+                //-------------------------------------------------------------------------------------
+                fclose(file);
+                return;
+            }
+        }
+        else {
+            inTriple = false;
+            //ApuntadorDoble----------------------------------------------------------------------
+            BloqueApuntador apuntador = nuevoApuntador();//nuestro bloque de apuntadores simple
+            int numBloqueApuntador = block.s_first_blo;
+            marcarBloqueLIbre(block,file);
+            block.s_first_blo = primerBloqueLIbre(block, file);
+            block.s_free_blocks_count--;
+
+            innodo.i_block[13] = numBloqueApuntador;
+
+            //Apuntador---------------------------------------------------------------------------
+            BloqueApuntador nuevoAp = nuevoApuntador();//nuestro bloque de apuntadores simple
+            int numNuevoBloqueApuntador = block.s_first_blo;
+            marcarBloqueLIbre(block,file);
+            block.s_first_blo = primerBloqueLIbre(block, file);
+            block.s_free_blocks_count--;
+
+            apuntador.b_pointers[0] = numNuevoBloqueApuntador;
+
+            //Carpeta-----------------------------------------------------------------------------
+            BloqueCarpeta carpeta;
+            int numBloque = block.s_first_blo;
+            marcarBloqueLIbre(block,file);
+            block.s_first_blo = primerBloqueLIbre(block, file);
+            block.s_free_blocks_count--;
+
+            nuevoAp.b_pointers[0] = numBloque;
+
+            for(int g = 0; g < 12; g++)
+            {
+                carpeta.b_content[0].b_name[g] = NULL;
+                carpeta.b_content[1].b_name[g] = NULL;
+                carpeta.b_content[2].b_name[g] = NULL;
+                carpeta.b_content[3].b_name[g] = NULL;
+            }
+
+            //insertamos el nuevo innodo---------------------------------------------------------
+            int nInnodo = block.s_first_ino;//primer innodo libre
+            marcarInnodoLibre(block,file);//marcamos que se uso
+            block.s_first_ino = primerInnodoLibre(block,file);//guardamos el nuevo innodo libre
+            block.s_free_inodes_count--;
+
+            carpeta.b_content[0].b_innodo = nInnodo;
+            string n = name.toStdString();
+            for(int z = 0; z < n.size(); z++)
+            {
+                carpeta.b_content[0].b_name[z] = n[z];
+            }
+
+            Innodo nuevo = nuevoInnodo('0');
+
+            //------------------------------------------------------------------------------------------
+            nuevo.i_block[0] = block.s_first_blo;
+            marcarBloqueLIbre(block,file);
+            block.s_first_blo = primerBloqueLIbre(block,file);
+            block.s_free_blocks_count--;
+
+            BloqueCarpeta carpetaNueva;
+            for(int g = 0; g < 12; g++)
+            {
+                carpetaNueva.b_content[0].b_name[g] = NULL;
+                carpetaNueva.b_content[1].b_name[g] = NULL;
+                carpetaNueva.b_content[2].b_name[g] = NULL;
+                carpetaNueva.b_content[3].b_name[g] = NULL;
+            }
+
+            int actual,padre;
+
+            if(path.size() <= 1)
+            {
+                actual = 0;
+                padre = 0;
+            }
+            else
+            {
+                actual = buscarInnodo(path);
+                path.removeLast();
+                padre = buscarInnodo(path);
+            }
+
+            carpetaNueva.b_content[0].b_name[0] = '.';
+            carpetaNueva.b_content[0].b_innodo = actual;
+
+            carpetaNueva.b_content[1].b_name[0] = '.';
+            carpetaNueva.b_content[1].b_name[1] = '.';
+            carpetaNueva.b_content[1].b_innodo = padre;//padre
+
+            fseek(file,block.s_block_start,SEEK_SET);
+            fseek(file,nuevo.i_block[0]*block.s_block_size,SEEK_CUR);
+            fwrite(&carpetaNueva,block.s_block_size,1,file);
+            //------------------------------------------------------------------------------------------
+
+            fseek(file,block.s_block_start,SEEK_SET);
+            fseek(file,numBloqueApuntador*block.s_block_size,SEEK_CUR);
+            fwrite(&apuntador,block.s_block_size,1,file);
+
+            fseek(file,block.s_block_start,SEEK_SET);
+            fseek(file,numNuevoBloqueApuntador*block.s_block_size,SEEK_CUR);
+            fwrite(&nuevoAp,block.s_block_size,1,file);
+
+            fseek(file,block.s_inode_start,SEEK_SET);
+            fseek(file,numInnodoPadre*block.s_inode_size,SEEK_CUR);
+            fwrite(&innodo,block.s_inode_size,1,file);//escribimos el innodo actualizado
+
+            fseek(file,block.s_inode_start,SEEK_SET);
+            fseek(file,nInnodo*block.s_inode_size,SEEK_CUR);
+            fwrite(&nuevo,block.s_inode_size,1,file);//escribimos el nuevo innodo
+
+            fseek(file,block.s_block_start,SEEK_SET);
+            fseek(file,numBloque*block.s_block_size,SEEK_CUR);
+            fwrite(&carpeta,block.s_block_size,1,file);//escribimos el bloque carpeta actualizada
+
+            fseek(file,usuario.particion.part_start,SEEK_SET);
+            fwrite(&block,sizeof(struct SuperBloque),1,file);
+            //-------------------------------------------------------------------------------------
+            fclose(file);
+            return;
+        }
+
+        if(innodo.i_block[14] != -1 && inTriple)
+        {
+
+        }
+        else {
+
+        }
     }
 
     fclose(file);
@@ -2320,6 +3292,18 @@ void Funcionalidad::marcarInnodoLibre(SuperBloque block, FILE *file)
             return;
         }
     }
+}
+
+BloqueApuntador Funcionalidad::nuevoApuntador()
+{
+    BloqueApuntador apuntador;
+
+    for(int x = 0; x < 16; x++)
+    {
+        apuntador.b_pointers[x] = -1;
+    }
+
+    return apuntador;
 }
 
 Innodo Funcionalidad::nuevoInnodo(char tipo)
