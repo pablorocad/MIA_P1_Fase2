@@ -170,6 +170,8 @@ public:
 
     QString obtenerContenidoArchivo(int numInnodo);
 
+    void cambiarNombre(QString oldName, QString newName, int padre);
+
 
 private:
 

@@ -1009,6 +1009,31 @@ void Funcionalidad::Ejecutar(Nodo *temp){
 
         }
     }
+    else if (temp->token == "ren")
+    {
+        QHash<QString,QString> par = parametros(temp->hijo.first());//Tomamos todos nuestros parametros
+        if(!par.contains("path"))
+        {
+            cout << "Falta el parametro PATH en ren | linea: " << temp->linea << " columna: " << temp->columna << endl;
+        }
+        else if(!par.contains("name"))
+        {
+            cout << "Falta el parametro NAME en ren | linea: " << temp->linea << " columna: " << temp->columna << endl;
+        }
+        else
+        {
+            QString nuevoPath = par.value("path");
+            nuevoPath.replace("\"","");
+            QStringList path = nuevoPath.split('/');
+
+            QString name = path.last();
+            path.removeLast();
+            path.removeFirst();
+
+            int innodoPadre = buscarInnodo(path);
+            cambiarNombre(name,par.value("name"),innodoPadre);
+        }
+    }
     else if(temp->token == "rep"){
         QHash<QString,QString> par = parametros(temp->hijo.first());//Tomamos todos nuestros parametros
 
@@ -1822,7 +1847,6 @@ void Funcionalidad::blockTree(int padre, int actual, int posicion, char tipo, of
     }
 }
 
-
 QHash<QString,QString> Funcionalidad::parametros(Nodo *temp)
 {
     QHash<QString,QString> par;
@@ -1876,8 +1900,6 @@ void Funcionalidad::Graficar(string padre, Nodo *temp, string &grafo, int &conta
         Graficar(nameChild, hijo, grafo, contador);
     }
 }
-
-
 
 void Funcionalidad::swap(MBR_Partition *xp, MBR_Partition *yp)
 {
@@ -3701,6 +3723,64 @@ QString Funcionalidad::obtenerContenidoArchivo(int numInnodo)
     fclose(file);
 
     return contenido;
+}
+
+void Funcionalidad::cambiarNombre(QString oldName, QString newName, int padre)
+{
+    string url = usuario.pathDisco.toStdString();
+    const char *u = url.c_str();
+    FILE *file;
+    file = fopen(u,"rb+");
+
+    Innodo innodo;
+    SuperBloque block;
+    BloqueCarpeta carpeta;
+
+    fseek(file,usuario.particion.part_start,SEEK_SET);
+    fread(&block,sizeof (struct SuperBloque),1,file);
+    fseek(file,block.s_inode_start,SEEK_SET);
+    fseek(file,padre*block.s_inode_size,SEEK_CUR);
+    fread(&innodo,block.s_inode_size,1,file);
+
+    for(int x = 0; x < 12; x++)
+    {
+        if(innodo.i_block[x] != -1)
+        {
+            fseek(file,block.s_block_start,SEEK_SET);
+            fseek(file,innodo.i_block[x]*block.s_block_size,SEEK_CUR);
+            fread(&carpeta,block.s_block_size,1,file);
+
+            for(int content = 0; content < 4; content++)
+            {
+                if(carpeta.b_content[content].b_innodo != -1)
+                {
+                    QString actualName(carpeta.b_content[content].b_name);
+                    if(actualName == oldName)
+                    {
+                        string nameAux = newName.toStdString();
+                        for(int y = 0; y < 12; y++)
+                        {
+                            if(y < nameAux.size())
+                            {
+                                carpeta.b_content[content].b_name[y] = nameAux[y];
+                            }
+                            else{
+                                carpeta.b_content[content].b_name[y] = NULL;
+                            }
+                        }
+
+                        fseek(file,block.s_block_start,SEEK_SET);
+                        fseek(file,innodo.i_block[x]*block.s_block_size,SEEK_CUR);
+                        fwrite(&carpeta,block.s_block_size,1,file);
+                        fclose(file);
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    fclose(file);
 }
 
 //Metodos de ayuda-----------------------------------------------------------------------------
