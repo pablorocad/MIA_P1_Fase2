@@ -987,6 +987,28 @@ void Funcionalidad::Ejecutar(Nodo *temp){
             }
         }
     }
+    else if (temp->token == "pause")
+    {
+        cout << "Presione cualquier tecla para continuar" << endl;
+        getchar();
+    }
+    else if (temp->token == "cat")
+    {
+        QHash<QString,QString> par = parametros(temp->hijo.first());//Tomamos todos nuestros parametros
+        if(!par.contains("file"))
+        {
+            cout << "Falta el parametro FILE en cat | linea: " << temp->linea << " columna: " << temp->columna << endl;
+        }
+        else
+        {
+            QStringList path = par.value("file").split('/');
+            path.removeFirst();
+            int innodoArchivo = buscarInnodo(path);
+            QString cont = obtenerContenidoArchivo(innodoArchivo);
+            cout << cont.toStdString() << endl;
+
+        }
+    }
     else if(temp->token == "rep"){
         QHash<QString,QString> par = parametros(temp->hijo.first());//Tomamos todos nuestros parametros
 
@@ -1164,9 +1186,403 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                     fclose(file);
                     out << "}\n";
                 }
+                else if(par.value("name") == "inode")
+                {
+                    SuperBloque block;
+                    file = fopen(mount[partLetra].path.toUtf8().constData(),"rb+");
+                    fseek(file,mount[partLetra].numero[partNum].particion.part_start,SEEK_SET);
+                    fread(&block,sizeof (struct SuperBloque),1,file);
 
+                    char byte;
+                    Innodo innodo;
+                    int ultimoInodo = 0;
 
-                //const char* ext = e.c_str();
+                    out << "digraph G{ \n";
+                    out << "rankdir=LR; \n";
+
+                    fseek(file,block.s_bm_inode_start,SEEK_SET);
+                    for(int x = 0; x < block.s_inodes_count; x++)
+                    {
+                        fread(&byte,sizeof (char),1,file);
+                        if(byte == '1')
+                        {
+                            ultimoInodo = x;
+                        }
+                    }
+
+                    for(int x = 0; x < block.s_inodes_count; x++)
+                    {
+                        fseek(file,block.s_bm_inode_start,SEEK_SET);
+                        fseek(file,x*sizeof(char),SEEK_CUR);
+                        fread(&byte,sizeof (char),1,file);
+
+                        if(byte == '1')
+                        {
+                            fseek(file,block.s_inode_start,SEEK_SET);
+                            fseek(file,x*block.s_inode_size,SEEK_CUR);
+                            fread(&innodo,block.s_inode_size,1,file);
+
+                            out << "innode_" << x;
+                            out << " [fillcolor=darkturquoise,style=\"filled,bold\",shape=record, label=\"Inodo_" << x << " ";
+                            out << "| {i_uid | " << innodo.i_uid << "}";
+                            out << "| {i_gid | " << innodo.i_gid << "}";
+                            out << "| {i_size | " << innodo.i_size << "}";
+                            out << "| {i_atime | " << innodo.i_atime << "}";
+                            out << "| {i_ctime | " << innodo.i_ctime << "}";
+                            out << "| {i_mtime | " << innodo.i_mtime << "}";
+                            out << "| {i_type | " << innodo.i_type << "}";
+                            out << "| {i_perm | " << innodo.i_perm << "}";
+
+                            for(int x = 0; x < 15; x++)
+                            {
+                                out << "| {AD " << x << "| " << innodo.i_block[x] << "}";
+                            }
+
+                            out << "\"];";
+                            out << "\n";
+
+                            if(x == ultimoInodo)
+                            {
+                                break;
+                            }
+
+                            out << "innode_" << x << " -> " << "innode_" << x+1;
+                            out << "\n";
+                        }
+                    }
+
+                    fclose(file);
+                    out << "}\n";
+                }
+                else if(par.value("name") == "block")
+                {
+                    SuperBloque block;
+                    BloqueArchivo archivo;
+                    BloqueCarpeta carpeta;
+                    BloqueApuntador apuntadorSimple;
+                    BloqueApuntador apuntadorDoble;
+
+                    file = fopen(mount[partLetra].path.toUtf8().constData(),"rb+");
+                    fseek(file,mount[partLetra].numero[partNum].particion.part_start,SEEK_SET);
+                    fread(&block,sizeof (struct SuperBloque),1,file);
+
+                    char byte;
+                    Innodo innodo;
+                    int ultimoInodo = 0;
+
+                    out << "digraph G{ \n";
+                    out << "rankdir=LR; \n";
+
+                    fseek(file,block.s_bm_inode_start,SEEK_SET);
+                    for(int x = 0; x < block.s_inodes_count; x++)
+                    {
+                        fread(&byte,sizeof (char),1,file);
+                        if(byte == '1')
+                        {
+                            ultimoInodo = x;
+                        }
+                    }
+
+                    int anterior = -1;
+                    int posicion = 0;
+
+                    for(int x = 0; x < ultimoInodo; x++)
+                    {
+                        fseek(file,block.s_bm_inode_start,SEEK_SET);
+                        fseek(file,x*sizeof(char),SEEK_CUR);
+                        fread(&byte,sizeof (char),1,file);
+
+                        if(byte == '1')
+                        {
+                            fseek(file,block.s_inode_start,SEEK_SET);
+                            fseek(file,x*block.s_inode_size,SEEK_CUR);
+                            fread(&innodo,block.s_inode_size,1,file);
+
+                            for(int posI = 0; posI < 12; posI++)
+                            {
+                                posicion = innodo.i_block[posI];
+                                if(posicion != -1)
+                                {
+                                    fseek(file,block.s_block_start,SEEK_SET);
+                                    fseek(file,posicion*block.s_block_size,SEEK_CUR);
+                                    if(innodo.i_type == '0')
+                                    {
+                                        fread(&carpeta,block.s_block_size,1,file);
+                                        out << "block_" << posicion;
+                                        out << " [fillcolor=chartreuse2,style=\"filled,bold\",shape=record, label=\"Bloque_" << posicion << " ";
+
+                                        for(int x = 0; x < 4; x++)
+                                        {
+                                            out << "| {" << carpeta.b_content[x].b_name <<"| " << carpeta.b_content[x].b_innodo << "}";
+                                        }
+
+                                        out << "\"];";
+                                        out << "\n";
+
+                                    }
+                                    else
+                                    {
+                                        fread(&archivo,block.s_block_size,1,file);
+                                        out << "block_" << posicion;
+                                        out << " [fillcolor=gold,style=\"filled,bold\",shape=record, label=\"Bloque_" << posicion << " ";
+                                        out << "| {";
+                                        for(int x = 0; x < 64; x++)
+                                        {
+                                            if(archivo.b_content[x] != NULL)
+                                            {
+                                                out << archivo.b_content[x];
+                                            }
+                                        }
+                                        out << "}";
+
+                                        out << "\"];";
+                                        out << "\n";
+                                    }
+
+                                    if(anterior != -1)
+                                    {
+                                        out << "block_" << anterior << " -> " << "block_" << posicion << ";";
+                                        out << "\n";
+
+                                    }
+                                    anterior = posicion;
+                                }
+                            }
+
+                            if(innodo.i_block[12] != -1)
+                            {
+                                fseek(file,block.s_block_start,SEEK_SET);
+                                fseek(file,innodo.i_block[12]*block.s_block_size,SEEK_CUR);
+                                fread(&apuntadorSimple,block.s_block_size,1,file);
+
+                                out << "block_" << innodo.i_block[12];
+                                out << " [fillcolor=coral,style=\"filled,bold\",shape=record, label=\"Bloque_" << innodo.i_block[12] << " ";
+                                for(int x = 0; x < 16; x++)
+                                {
+                                    out << "| {" << apuntadorSimple.b_pointers[x] << "}";
+                                }
+
+                                out << "\"];";
+                                out << "\n";
+
+                                if(anterior != -1)
+                                {
+                                    out << "block_" << anterior << " -> " << "block_" << innodo.i_block[12] << ";";
+                                    out << "\n";
+
+                                }
+                                anterior = innodo.i_block[12];
+
+                                for(int posicionAp : apuntadorSimple.b_pointers)
+                                {
+                                    if(posicionAp != -1)
+                                    {
+                                        fseek(file,block.s_block_start,SEEK_SET);
+                                        fseek(file,posicionAp*block.s_block_size,SEEK_CUR);
+                                        if(innodo.i_type == '0')
+                                        {
+                                            fread(&carpeta,block.s_block_size,1,file);
+                                            out << "block_" << posicionAp;
+                                            out << " [fillcolor=chartreuse2,style=\"filled,bold\",shape=record, label=\"Bloque_" << posicionAp << " ";
+
+                                            for(int x = 0; x < 4; x++)
+                                            {
+                                                out << "| {" << carpeta.b_content[x].b_name <<"| " << carpeta.b_content[x].b_innodo << "}";
+                                            }
+
+                                            out << "\"];";
+                                            out << "\n";
+
+                                        }
+                                        else
+                                        {
+                                            fread(&archivo,block.s_block_size,1,file);
+                                            out << "block_" << posicionAp;
+                                            out << " [fillcolor=gold,style=\"filled,bold\",shape=record, label=\"Bloque_" << posicionAp << " ";
+                                            out << "| {";
+                                            for(int x = 0; x < 64; x++)
+                                            {
+                                                if(archivo.b_content[x] != NULL)
+                                                {
+                                                    out << archivo.b_content[x];
+                                                }
+                                            }
+                                            out << "}";
+
+                                            out << "\"];";
+                                            out << "\n";
+                                        }
+
+                                        if(anterior != -1)
+                                        {
+                                            out << "block_" << anterior << " -> " << "block_" << posicionAp << ";";
+                                            out << "\n";
+
+                                        }
+                                        anterior = posicionAp;
+                                    }
+                                }
+                            }
+
+                            if(innodo.i_block[13] != -1)
+                            {
+                                fseek(file,block.s_block_start,SEEK_SET);
+                                fseek(file,innodo.i_block[13]*block.s_block_size,SEEK_CUR);
+                                fread(&apuntadorDoble,block.s_block_size,1,file);
+
+                                out << "block_" << innodo.i_block[13];
+                                out << " [fillcolor=coral,style=\"filled,bold\",shape=record, label=\"Bloque_" << innodo.i_block[12] << " ";
+                                for(int x = 0; x < 16; x++)
+                                {
+                                    out << "| {" << apuntadorDoble.b_pointers[x] << "}";
+                                }
+
+                                out << "\"];";
+                                out << "\n";
+
+                                if(anterior != -1)
+                                {
+                                    out << "block_" << anterior << " -> " << "block_" << innodo.i_block[13] << ";";
+                                    out << "\n";
+
+                                }
+                                anterior = innodo.i_block[13];
+
+                                for(int posicionApD : apuntadorDoble.b_pointers)
+                                {
+                                   if(posicionApD != -1)
+                                   {
+                                       fseek(file,block.s_block_start,SEEK_SET);
+                                       fseek(file,posicionApD*block.s_block_size,SEEK_CUR);
+                                       fread(&apuntadorSimple,block.s_block_size,1,file);
+
+                                       out << "block_" << posicionApD;
+                                       out << " [fillcolor=coral,style=\"filled,bold\",shape=record, label=\"Bloque_" << posicionApD << " ";
+                                       for(int x = 0; x < 16; x++)
+                                       {
+                                           out << "| {" << posicionApD << "}";
+                                       }
+
+                                       out << "\"];";
+                                       out << "\n";
+
+                                       if(anterior != -1)
+                                       {
+                                           out << "block_" << anterior << " -> " << "block_" << posicionApD << ";";
+                                           out << "\n";
+
+                                       }
+                                       anterior = posicionApD;
+
+                                       for(int posicionAp : apuntadorSimple.b_pointers)
+                                       {
+                                           if(posicionAp != -1)
+                                           {
+                                               fseek(file,block.s_block_start,SEEK_SET);
+                                               fseek(file,posicionAp*block.s_block_size,SEEK_CUR);
+                                               if(innodo.i_type == '0')
+                                               {
+                                                   fread(&carpeta,block.s_block_size,1,file);
+                                                   out << "block_" << posicionAp;
+                                                   out << " [fillcolor=chartreuse2,style=\"filled,bold\",shape=record, label=\"Bloque_" << posicionAp << " ";
+
+                                                   for(int x = 0; x < 4; x++)
+                                                   {
+                                                       out << "| {" << carpeta.b_content[x].b_name <<"| " << carpeta.b_content[x].b_innodo << "}";
+                                                   }
+
+                                                   out << "\"];";
+                                                   out << "\n";
+
+                                               }
+                                               else
+                                               {
+                                                   fread(&archivo,block.s_block_size,1,file);
+                                                   out << "block_" << posicionAp;
+                                                   out << " [fillcolor=gold,style=\"filled,bold\",shape=record, label=\"Bloque_" << posicionAp << " ";
+                                                   out << "| {";
+                                                   for(int x = 0; x < 64; x++)
+                                                   {
+                                                       if(archivo.b_content[x] != NULL)
+                                                       {
+                                                           out << archivo.b_content[x];
+                                                       }
+                                                   }
+                                                   out << "}";
+
+                                                   out << "\"];";
+                                                   out << "\n";
+                                               }
+
+                                               if(anterior != -1)
+                                               {
+                                                   out << "block_" << anterior << " -> " << "block_" << posicionAp << ";";
+                                                   out << "\n";
+
+                                               }
+                                               anterior = posicionAp;
+                                           }
+                                       }
+                                   }
+                                }
+                            }
+                        }
+                    }
+
+                    fclose(file);
+                    out << "}\n";
+                }
+                else if(par.value("name") == "bm_inode")
+                {
+                    char byte;
+                    int contador = 1;
+
+                    SuperBloque block;
+                    file = fopen(mount[partLetra].path.toUtf8().constData(),"rb+");
+                    fseek(file,mount[partLetra].numero[partNum].particion.part_start,SEEK_SET);
+                    fread(&block,sizeof (struct SuperBloque),1,file);
+                    fseek(file,block.s_bm_inode_start,SEEK_SET);
+
+                    for(int x = 0; x < block.s_inodes_count; x++)
+                    {
+                        fread(&byte,sizeof (char),1,file);
+                        out << byte;
+                        out << "    ";
+                        if(contador > 19)
+                        {
+                            contador = 0;
+                            out << "\n";
+                        }
+                        contador++;
+                    }
+                    return;
+                }
+                else if(par.value("name") == "bm_block")
+                {
+                    char byte;
+                    int contador = 1;
+
+                    SuperBloque block;
+                    file = fopen(mount[partLetra].path.toUtf8().constData(),"rb+");
+                    fseek(file,mount[partLetra].numero[partNum].particion.part_start,SEEK_SET);
+                    fread(&block,sizeof (struct SuperBloque),1,file);
+                    fseek(file,block.s_bm_block_start,SEEK_SET);
+
+                    for(int x = 0; x < block.s_blocks_count; x++)
+                    {
+                        fread(&byte,sizeof (char),1,file);
+                        out << byte;
+                        out << "    ";
+                        if(contador > 19)
+                        {
+                            contador = 0;
+                            out << "\n";
+                        }
+                        contador++;
+                    }
+                    return;
+                }
+
 
                 QString comandoS = "dot -T";
                 comandoS.append(ext);
@@ -1181,30 +1597,7 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                 //cout<<command<<endl;
                 system(command);
             }
-
-
         }
-
-        /*MBR information;
-        FILE *file;
-        file = fopen(par.value("path").toUtf8().constData(),"rb");
-        fread(&information,sizeof(struct MBR),1,file);
-
-        cout << "------MBR-----" << endl;
-        cout << "tamano: " << information.mbr_tamano << endl;
-        cout << "fecha: " << information.mbr_fecha_creacion << endl;
-        cout << "signature: " << information.mbr_disk_signature << endl;
-        cout << "fit: " << information.disk_fit << endl;
-        cout << "--------------" << endl;
-
-        EBR ext[20];
-        fseek(file,sizeof (struct MBR)+1,SEEK_SET);
-        fread(&ext,sizeof(ext),1,file);
-        cout << "-----------------";
-
-        fclose(file);*/
-
-
     }
 }
 
@@ -1428,6 +1821,7 @@ void Funcionalidad::blockTree(int padre, int actual, int posicion, char tipo, of
         }
     }
 }
+
 
 QHash<QString,QString> Funcionalidad::parametros(Nodo *temp)
 {
@@ -1714,6 +2108,58 @@ void Funcionalidad::formatearParticion(QHash<QString,QString> par)
         carpetaNueva.b_content[1].b_name[1] = '.';
         carpetaNueva.b_content[1].b_innodo = padre;//padre
 
+        char cont[64];
+
+        for(int x = 0; x < 64; x++)
+        {
+            cont[x] = NULL;
+        }
+        string c = "1,G,root \n 1,U,root,root,123 \n ";
+        for(int x = 0; x < c.size(); x++)
+        {
+            cont[x] = c[x];
+        }
+
+        int nInnodo = block.s_first_ino;//primer innodo libre
+        marcarInnodoLibre(block,file);//marcamos que se uso
+        block.s_first_ino = primerInnodoLibre(block,file);//guardamos el nuevo innodo libre
+        block.s_free_inodes_count--;
+
+        carpetaNueva.b_content[2].b_innodo = nInnodo;
+        string name = "users.txt";
+
+        for(int g = 0; g < 12; g++)
+        {
+            carpetaNueva.b_content[2].b_name[g] = NULL;
+        }
+        for(int z = 0; z < name.size(); z++)
+        {
+            carpetaNueva.b_content[2].b_name[z] = name[z];
+        }
+
+        Innodo nuevo = nuevoInnodo('1');
+
+        //creamos el primer bloque con padre y actual-------------------------------------------------------
+        nuevo.i_block[0] = block.s_first_blo;
+        marcarBloqueLIbre(block,file);
+        block.s_first_blo = primerBloqueLIbre(block,file);
+        block.s_free_blocks_count--;
+
+
+        BloqueArchivo archivoNuevo;
+        for(int g = 0; g < 64; g++)
+        {
+            archivoNuevo.b_content[g] = cont[g];
+        }
+
+        fseek(file,block.s_inode_start,SEEK_SET);
+        fseek(file,carpetaNueva.b_content[2].b_innodo*block.s_inode_size,SEEK_CUR);
+        fwrite(&nuevo,sizeof (struct Innodo),1,file);
+
+        fseek(file,block.s_block_start,SEEK_SET);
+        fseek(file,nuevo.i_block[0]*block.s_block_size,SEEK_CUR);
+        fwrite(&archivoNuevo,block.s_block_size,1,file);
+
         fseek(file,block.s_block_start,SEEK_SET);
         fseek(file,in.i_block[0]*block.s_block_size,SEEK_CUR);
         fwrite(&carpetaNueva,block.s_block_size,1,file);
@@ -1724,6 +2170,8 @@ void Funcionalidad::formatearParticion(QHash<QString,QString> par)
 
         fseek(file,block.s_inode_start,SEEK_SET);
         fwrite(&in,sizeof (struct Innodo),1,file);
+
+
 
         fclose(file);
 
@@ -3219,7 +3667,40 @@ void Funcionalidad::crearArchivo(int numInnodoPadre,QString name,QStringList pat
         }
     }
     fclose(file);
+}
 
+QString Funcionalidad::obtenerContenidoArchivo(int numInnodo)
+{
+    QString contenido = "";
+
+    string url = usuario.pathDisco.toStdString();
+    const char *u = url.c_str();
+    FILE *file;
+    file = fopen(u,"rb+");
+
+    Innodo innodo;
+    SuperBloque block;
+    fseek(file,usuario.particion.part_start,SEEK_SET);
+    fread(&block,sizeof (struct SuperBloque),1,file);
+    fseek(file,block.s_inode_start,SEEK_SET);
+    fseek(file,numInnodo*block.s_inode_size,SEEK_CUR);
+    fread(&innodo,block.s_inode_size,1,file);
+
+    for(int x = 0; x < 15; x++)
+    {
+        if(innodo.i_block[x] != -1)
+        {
+            BloqueArchivo archivo;
+            fseek(file,block.s_block_start,SEEK_SET);
+            fseek(file,innodo.i_block[x]*block.s_block_size,SEEK_CUR);
+            fread(&archivo,block.s_block_size,1,file);
+            QString contAux(archivo.b_content);
+            contenido.append(contAux);
+        }
+    }
+    fclose(file);
+
+    return contenido;
 }
 
 //Metodos de ayuda-----------------------------------------------------------------------------

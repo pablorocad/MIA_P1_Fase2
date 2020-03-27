@@ -168,6 +168,8 @@ public:
     void innodoTree(int padre, int actual, int posicion, ofstream &out, FILE *file, SuperBloque block);
     void blockTree(int padre, int actual, int posicion, char tipo ,ofstream &out, FILE *file, SuperBloque block,bool esAp);
 
+    QString obtenerContenidoArchivo(int numInnodo);
+
 
 private:
 
