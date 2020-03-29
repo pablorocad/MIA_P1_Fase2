@@ -177,7 +177,7 @@ public:
     void agregarGrupo(QString name);
     void agregarUsuario(QString usr,QString pwd,QString grp);
 
-    int[] decToBinary(int n);
+    int decToBinary(int n);
 
 private:
 

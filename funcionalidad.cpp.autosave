@@ -4421,7 +4421,7 @@ void Funcionalidad::agregarUsuario(QString usr,QString pwd,QString grp)
 int Funcionalidad::decToBinary(int n)
 {
     // array to store binary number
-    int binaryNum[32];
+    int binaryNum[3];
 
     // counter for binary array
     int i = 0;

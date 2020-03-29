@@ -53,19 +53,6 @@ int main(int argc, char *argv[])
                 cout<<"Ingrese el comando para ejecutar"<<endl;
                 cin.getline(cadena1,sizeof (cadena1));
                 EjecutarComando(cadena1);
-
             }
-
-        //char t = 'z';
-        //cout << (int)t - 97 << endl;
-        //cout << (char)(25+97) << endl;
-
-            /*time_t t = time(0);
-            string tiempo = ctime(&t);
-            char tiempo_char[30];
-            strcpy(tiempo_char,tiempo.c_str());
-            cout << tiempo_char;*/
-
-
 }
 
