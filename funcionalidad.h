@@ -130,6 +130,7 @@ class Funcionalidad
 public:
     MOUNT_LETRA mount[27];
     Login usuario;
+    int numBloque;
 
     Funcionalidad();
     void Ejecutar(Nodo *temp);
@@ -139,6 +140,7 @@ public:
 
     int buscarInnodo(QStringList pathAux);//Metodo para buscar un innodo con un path
     int buscarInnodo(int numInnodo, QStringList path,int posicionPath, SuperBloque block, FILE *file);
+    void moverArchivo(QString name, int inodoDestino, int carpetaActual);
 
     void crearCarpeta(int numInnodoPadre,QString name,QStringList path);//Metodo de creacion de carpeta
     void crearArchivo(int numInnodoPadre,QString name,QStringList path, char contenido[64]);//Metodo de creacion de archivo

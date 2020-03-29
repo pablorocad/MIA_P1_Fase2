@@ -424,7 +424,7 @@ union yyalloc
 /* YYNNTS -- Number of nonterminals.  */
 #define YYNNTS  6
 /* YYNRULES -- Number of rules.  */
-#define YYNRULES  13
+#define YYNRULES  14
 /* YYNSTATES -- Number of states.  */
 #define YYNSTATES  18
 
@@ -474,7 +474,7 @@ static const yytype_uint8 yytranslate[] =
 static const yytype_uint8 yyrline[] =
 {
        0,    57,    57,    62,    67,    73,    80,    85,    90,    93,
-      96,    99,   102,   105
+      96,    99,   102,   105,   109
 };
 #endif
 
@@ -521,7 +521,7 @@ static const yytype_int8 yypact[] =
      means the default is an error.  */
 static const yytype_uint8 yydefact[] =
 {
-       0,     0,     0,     2,     4,     0,     5,     7,     1,     3,
+       0,    14,     0,     2,     4,     0,     5,     7,     1,     3,
       13,     6,     0,    11,     9,    10,    12,     8
 };
 
@@ -564,14 +564,14 @@ static const yytype_uint8 yystos[] =
 static const yytype_uint8 yyr1[] =
 {
        0,    10,    11,    12,    12,    13,    14,    14,    15,    15,
-      15,    15,    15,    15
+      15,    15,    15,    15,    15
 };
 
   /* YYR2[YYN] -- Number of symbols on the right hand side of rule YYN.  */
 static const yytype_uint8 yyr2[] =
 {
        0,     2,     1,     2,     1,     2,     2,     1,     4,     4,
-       4,     4,     4,     2
+       4,     4,     4,     2,     0
 };
 
 
@@ -1446,8 +1446,14 @@ yyreduce:
 #line 1447 "parser.cpp" /* yacc.c:1646  */
     break;
 
+  case 14:
+#line 109 "parser.y" /* yacc.c:1646  */
+    {(yyval.nodo)=new Nodo(0, 0,"","");}
+#line 1453 "parser.cpp" /* yacc.c:1646  */
+    break;
 
-#line 1451 "parser.cpp" /* yacc.c:1646  */
+
+#line 1457 "parser.cpp" /* yacc.c:1646  */
       default: break;
     }
   /* User semantic actions sometimes alter yychar, and that requires

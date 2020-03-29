@@ -104,4 +104,6 @@ PARAMETRO: Tguion identificador Tigual identificador{
            }
            |Tguion identificador{
                 $$=new Nodo(@1.first_line, @1.first_column,$2,$2);
-           };
+           }
+           |
+            {$$=new Nodo(0, 0,"","");};

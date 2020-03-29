@@ -767,7 +767,7 @@ void Funcionalidad::Ejecutar(Nodo *temp){
         QHash<QString,QString> par = parametros(temp->hijo.first());//Tomamos todos nuestros parametros
         if(!par.contains("id"))
         {
-            cout << "Falta el parametro ID en crear Login | linea: " << temp->linea << " columna: " << temp->columna << endl;
+            cout << "Falta el parametro ID en Login | linea: " << temp->linea << " columna: " << temp->columna << endl;
         }
         else
         {
@@ -1278,6 +1278,71 @@ void Funcionalidad::Ejecutar(Nodo *temp){
             }
 
             fclose(file);
+        }
+    }
+    else if (temp->token == "mv")
+    {
+        QHash<QString,QString> par = parametros(temp->hijo.first());
+        if(!par.contains("path"))
+        {
+            cout << "Falta el parametro NAME en crear reporte | linea: " << temp->linea << " columna: " << temp->columna << endl;
+        }
+        else if(!par.contains("dest"))
+        {
+            cout << "Falta el parametro ID en crear reporte | linea: " << temp->linea << " columna: " << temp->columna << endl;
+        }
+        else
+        {
+            QString destino = par.value("dest");
+            destino.replace("\"","");
+            QStringList dest = destino.split('/');
+            dest.removeFirst();
+
+            int innodoDestino = buscarInnodo(dest);
+
+            QString pathAux = par.value("path");
+            pathAux.replace("\"","");
+            QStringList path = pathAux.split('/');
+            path.removeFirst();
+
+            QString name = path.last();
+            int innodoActual = buscarInnodo(path);
+            //cout << "";
+            moverArchivo(name,innodoDestino,innodoActual);
+        }
+    }
+    else if (temp->token == "edit")
+    {
+        QHash<QString,QString> par = parametros(temp->hijo.first());
+        if(!par.contains("path"))
+        {
+            cout << "Falta el parametro PATH en edit | linea: " << temp->linea << " columna: " << temp->columna << endl;
+        }
+        else if(!par.contains("cont"))
+        {
+            cout << "Falta el parametro CONT en edit | linea: " << temp->linea << " columna: " << temp->columna << endl;
+        }
+        else
+        {
+            QString pathAux = par.value("path");
+            pathAux.replace("\"","");
+            QStringList path = pathAux.split('/');
+            path.removeFirst();
+            int innodo = buscarInnodo(path);
+
+            string cont = par.value("cont").toStdString();
+            char g[64];
+            for(int x = 0; x < 64; x++)
+            {
+                g[x] = NULL;
+            }
+
+            for(int x = 0; x < cont.size(); x++)
+            {
+                g[x] = cont[x];
+            }
+
+            crearArchivo(innodo,"",path,g);
         }
     }
     else if(temp->token == "rep"){
@@ -2676,6 +2741,7 @@ int Funcionalidad::buscarInnodo(int numInnodo, QStringList path,int posicionPath
                         if(name == path.value(posicionPath))//si la carpeta contiene lo que buscamos
                         {
                             posicionPath++;
+                            numBloque = num;
                             numRetorno = buscarInnodo(carpeta.b_content[y].b_innodo,path,posicionPath,block,file);
 
                             if(numRetorno != -1)//si ya encontramos el innodo retornamos el numero
@@ -2720,6 +2786,7 @@ int Funcionalidad::buscarInnodo(int numInnodo, QStringList path,int posicionPath
 
                             if(name == path.value(posicionPath))//si la carpeta contiene lo que buscamos
                             {
+                                numBloque = numCarpeta;
                                 posicionPath++;
                                 numRetorno = buscarInnodo(carpeta.b_content[y].b_innodo,path,posicionPath,block,file);
 
@@ -2777,6 +2844,7 @@ int Funcionalidad::buscarInnodo(int numInnodo, QStringList path,int posicionPath
 
                                     if(name == path.value(posicionPath))//si la carpeta contiene lo que buscamos
                                     {
+                                        numBloque = numCarpeta;
                                         posicionPath++;
                                         numRetorno = buscarInnodo(carpeta.b_content[y].b_innodo,path,posicionPath,block,file);
 
@@ -4189,6 +4257,144 @@ void Funcionalidad::cambiarNombre(QString oldName, QString newName, int padre)
     }
 
     fclose(file);
+}
+
+void Funcionalidad::moverArchivo(QString name, int inodoDestino, int carpetaActual)
+{
+    string url = usuario.pathDisco.toStdString();
+    const char *u = url.c_str();
+    FILE *file;
+    file = fopen(u,"rb+");
+
+    BloqueCarpeta carpeta;
+    SuperBloque block;
+
+    fseek(file,usuario.particion.part_start,SEEK_SET);
+    fread(&block,sizeof (struct SuperBloque),1,file);
+    fseek(file,block.s_block_start,SEEK_SET);
+    fseek(file,carpetaActual*block.s_block_size,SEEK_CUR);
+    fread(&carpeta,block.s_block_size,1,file);
+
+    string nameAux = name.toStdString();
+    string nameAux2 = "";
+    int numInodo = 0;
+
+    for(int x = 0; x < 4; x++)
+    {
+        nameAux2 = getString(carpeta.b_content[x].b_name,12);
+        if(nameAux == nameAux2)
+        {
+            numInodo = carpeta.b_content[x].b_innodo;
+            carpeta.b_content[x].b_innodo = -1;
+
+            for(int y = 0; y < 12; y++)
+            {
+                carpeta.b_content[x].b_name[y] = NULL;
+            }
+        }
+    }
+    fseek(file,block.s_block_start,SEEK_SET);
+    fseek(file,carpetaActual*block.s_block_size,SEEK_CUR);
+    fwrite(&carpeta,block.s_block_size,1,file);
+
+    Innodo innodo;
+    fseek(file,block.s_inode_start,SEEK_SET);
+    fseek(file,inodoDestino*block.s_inode_size,SEEK_CUR);
+    fread(&innodo,block.s_inode_size,1,file);
+
+    bool indirecto = true;
+    int espacioDisponible = -1;
+    for(int x = 0; x < 12; x++)//iremos a travez de los bloques directos buscando espacio
+    {
+        if(innodo.i_block[x] != -1)//si existe un bloque creado
+        {
+            BloqueCarpeta carpeta;
+            fseek(file,block.s_block_start,SEEK_SET);
+            fseek(file,innodo.i_block[x]*block.s_block_size,SEEK_CUR);
+            fread(&carpeta,block.s_block_size,1,file);//
+
+            for(int y = 0; y < 4; y++)
+            {
+                if(carpeta.b_content[y].b_innodo == -1)//si hay espacio en el bloque
+                {
+                    carpeta.b_content[y].b_innodo = numInodo;
+                    string n = name.toStdString();
+
+                    for(int g = 0; g < 12; g++)
+                    {
+                        carpeta.b_content[y].b_name[g] = NULL;
+                    }
+                    for(int z = 0; z < n.size(); z++)
+                    {
+                        carpeta.b_content[y].b_name[z] = n[z];
+                    }
+                    //--------------------------------------------------------------------------------------------------
+
+                    fseek(file,block.s_block_start,SEEK_SET);
+                    fseek(file,innodo.i_block[x]*block.s_block_size,SEEK_CUR);
+                    fwrite(&carpeta,block.s_block_size,1,file);//escribimos el bloque carpeta actualizada
+
+                    fseek(file,usuario.particion.part_start,SEEK_SET);
+                    fwrite(&block,sizeof(struct SuperBloque),1,file);
+                    fclose(file);
+                    return;
+                }
+            }
+
+        }
+        else if(innodo.i_block[x] == -1 && espacioDisponible == -1)
+        {
+            espacioDisponible = x;
+            indirecto = false;
+        }
+    }
+
+    if(espacioDisponible != -1)
+    {
+        //creamos un bloque carpeta-----------------------------------------------------------
+        BloqueCarpeta carpeta;
+        fseek(file,block.s_block_start,SEEK_SET);
+       int numBloque = block.s_first_blo;
+       marcarBloqueLIbre(block,file);
+       block.s_first_blo = primerBloqueLIbre(block, file);
+       block.s_free_blocks_count--;
+
+        for(int g = 0; g < 12; g++)
+        {
+            carpeta.b_content[0].b_name[g] = NULL;
+            carpeta.b_content[1].b_name[g] = NULL;
+            carpeta.b_content[2].b_name[g] = NULL;
+            carpeta.b_content[3].b_name[g] = NULL;
+        }
+        //-----------------------------------------------------------------------------------
+
+        //marcamos que usamos un bloque------------------------------------------------------
+        innodo.i_block[espacioDisponible] = numBloque;
+        //-----------------------------------------------------------------------------------
+
+        carpeta.b_content[0].b_innodo = numInodo;
+        string n = name.toStdString();
+        for(int z = 0; z < n.size(); z++)
+        {
+            carpeta.b_content[0].b_name[z] = n[z];
+        }
+        //------------------------------------------------------------------------------------------
+
+        fseek(file,block.s_inode_start,SEEK_SET);
+        fseek(file,inodoDestino*block.s_inode_size,SEEK_CUR);
+        fwrite(&innodo,block.s_inode_size,1,file);//escribimos el innodo actualizado
+
+        fseek(file,block.s_block_start,SEEK_SET);
+        fseek(file,numBloque*block.s_block_size,SEEK_CUR);
+        fwrite(&carpeta,block.s_block_size,1,file);//escribimos el bloque carpeta actualizada
+
+        fseek(file,usuario.particion.part_start,SEEK_SET);
+        fwrite(&block,sizeof(struct SuperBloque),1,file);
+        //-------------------------------------------------------------------------------------
+        fclose(file);
+        return;
+    }
+
 }
 
 //Metodos de ayuda-----------------------------------------------------------------------------
