@@ -170,6 +170,8 @@ public:
 
     void innodoTree(int padre, int actual, int posicion, ofstream &out, FILE *file, SuperBloque block);
     void blockTree(int padre, int actual, int posicion, char tipo ,ofstream &out, FILE *file, SuperBloque block,bool esAp);
+    void innodoLS(int actual, string name, ofstream &out, FILE *file, SuperBloque block);
+    void blockLS(int actual, ofstream &out, FILE *file, SuperBloque block);
 
     QString obtenerContenidoArchivo(int numInnodo);
 
@@ -177,7 +179,7 @@ public:
     void agregarGrupo(QString name);
     void agregarUsuario(QString usr,QString pwd,QString grp);
 
-    int[] decToBinary(int n);
+    int decToBinary(int n);
 
 private:
 

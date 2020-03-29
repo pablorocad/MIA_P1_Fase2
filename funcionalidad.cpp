@@ -790,7 +790,7 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                 QString contenido = obtenerContenidoArchivo(1);
 
                 QStringList reg = contenido.split('\n');
-                int grupo = 1;
+                QString grupo = "";
                 for(QString aux : reg)
                 {
                     QStringList reg2 = aux.split(',');
@@ -800,11 +800,18 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                         if(reg2.value(3) == par.value("usr"))
                         {
                             usuario.user = reg2.value(0);
+                            grupo = reg2.value(2);
                         }
                     }
-                    else if(reg2.value(1) == "G")
+                }
+
+                for(QString aux : reg)
+                {
+                    QStringList reg2 = aux.split(',');
+
+                    if(reg2.value(1) == "G")
                     {
-                        if(reg2.value(2) == par.value("grp"))
+                        if(reg2.value(2) == grupo)
                         {
                             usuario.group = reg2.value(0);
                         }
@@ -1880,6 +1887,28 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                     out << c;
                     return;
                 }
+                else if(par.value("name") == "ls")
+                {
+                    SuperBloque block;
+                    file = fopen(mount[partLetra].path.toUtf8().constData(),"rb+");
+                    fseek(file,mount[partLetra].numero[partNum].particion.part_start,SEEK_SET);
+                    fread(&block,sizeof (struct SuperBloque),1,file);
+
+                    out << "digraph G{ \n";
+                    out << "node [shape=plaintext] \n";
+
+                    out << "ls";
+                    out << " [label=<<table>";
+                    out << "<tr>";
+                    out << "<td>Permisos</td><td>Owner</td><td>Grupo</td><td>Size</td><td>Fecha</td><td>Tipo</td><td>Name</td>";
+                    out << "</tr>";
+                    innodoLS(0,"",out,file,block);
+                    out << "</table>>];";
+                    out << "\n";
+                    out << "}\n";
+
+                    fclose(file);
+                }
 
                 QString comandoS = "dot -T";
                 comandoS.append(ext);
@@ -1896,6 +1925,93 @@ void Funcionalidad::Ejecutar(Nodo *temp){
             }
         }
     }
+}
+
+void Funcionalidad::innodoLS(int actual, string name, ofstream &out, FILE *file, SuperBloque block)
+{
+    Innodo innodo;
+    fseek(file,block.s_inode_start,SEEK_SET);
+    fseek(file,actual*block.s_inode_size,SEEK_CUR);
+    fread(&innodo,block.s_inode_size,1,file);
+
+    if(actual != 0)
+    {
+        QString contenido = obtenerContenidoArchivo(1);
+
+        QStringList reg = contenido.split('\n');
+        string usuario = "";
+        string grupo = "";
+        for(QString aux : reg)
+        {
+            QStringList reg2 = aux.split(',');
+
+            if(reg2.value(1) == "U" && reg2.value(0).toInt() == innodo.i_uid)
+            {
+                usuario = reg2.value(3).toStdString();
+            }
+
+            if(reg2.value(1) == "G" && reg2.value(0).toInt() == innodo.i_gid)
+            {
+                grupo = reg2.value(2).toStdString();
+            }
+        }
+        out << "<tr>";
+        out << "<td>" << innodo.i_perm << "</td>";
+        out << "<td>" << usuario.c_str() << "</td>";
+        out << "<td>" << grupo.c_str() << "</td>";
+        out << "<td>" << innodo.i_size << "</td>";
+        out << "<td>" << innodo.i_atime << "</td>";
+        if(innodo.i_type == '0')
+        {
+            out << "<td>Carpeta</td>";
+        }
+        else
+        {
+            out << "<td>Archivo</td>";
+        }
+        out << "<td>" << name.c_str() << "</td>";
+        out << "</tr>";
+    }
+
+    if(innodo.i_type == '0')
+    {
+        for(int x = 0; x < 12; x++)
+        {
+            if(innodo.i_block[x] != -1)
+            {
+                blockLS(innodo.i_block[x],out,file,block);
+            }
+        }
+    }
+}
+
+void Funcionalidad::blockLS(int actual, ofstream &out, FILE *file, SuperBloque block)
+{
+
+    BloqueCarpeta carpeta;
+    fseek(file,block.s_block_start,SEEK_SET);
+    fseek(file,actual*block.s_block_size,SEEK_CUR);
+    fread(&carpeta,block.s_block_size,1,file);
+
+    for(int x = 0; x < 4; x++)
+    {
+        if(carpeta.b_content[x].b_innodo != -1 && carpeta.b_content[x].b_name[0] != '.')
+        {
+            string n = "";
+            for(int y = 0; y < 12; y++)
+            {
+               if(carpeta.b_content[x].b_name[y] != NULL)
+               {
+                   n = n + carpeta.b_content[x].b_name[y];
+               }
+               else {
+                break;
+               }
+            }
+            innodoLS(carpeta.b_content[x].b_innodo,n,out,file,block);
+        }
+    }
+
 }
 
 void Funcionalidad::innodoTree(int padre, int actual, int posicion, ofstream &out, FILE *file, SuperBloque block)
@@ -4421,7 +4537,7 @@ void Funcionalidad::agregarUsuario(QString usr,QString pwd,QString grp)
 int Funcionalidad::decToBinary(int n)
 {
     // array to store binary number
-    int binaryNum[32];
+    int binaryNum[3];
 
     // counter for binary array
     int i = 0;
