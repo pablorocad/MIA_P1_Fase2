@@ -837,6 +837,11 @@ void Funcionalidad::Ejecutar(Nodo *temp){
 
         }
     }
+    else if(temp->token == "logout")
+    {
+        Login nuevo;
+        usuario = nuevo;
+    }
     else if(temp->token == "mkfs")//Formatear particion
     {
         QHash<QString,QString> par = parametros(temp->hijo.first());//Tomamos todos nuestros parametros
@@ -4395,6 +4400,415 @@ void Funcionalidad::moverArchivo(QString name, int inodoDestino, int carpetaActu
         return;
     }
 
+    if(indirecto)
+    {
+        bool inDoble = true;
+        bool inTriple = true;
+
+        if(innodo.i_block[12] != -1)//Bloque simple directo
+        {
+            BloqueApuntador apuntador;
+            fseek(file,block.s_block_start,SEEK_SET);
+            fseek(file,innodo.i_block[12]*block.s_block_size,SEEK_CUR);
+            fread(&apuntador,block.s_block_size,1,file);
+
+            for(int x = 0; x < 16; x++)
+            {
+                if(apuntador.b_pointers[x] != -1)
+                {
+
+                    BloqueCarpeta carpeta;
+                    fseek(file,block.s_block_start,SEEK_SET);
+                    fseek(file,apuntador.b_pointers[x]*block.s_block_size,SEEK_CUR);
+                    fread(&carpeta,block.s_block_size,1,file);//
+
+                    for(int y = 0; y < 4; y++)
+                    {
+                        if(carpeta.b_content[y].b_innodo == -1)//si hay espacio en el bloque
+                        {
+                            inDoble = false;
+                            inTriple = false;
+
+                            carpeta.b_content[y].b_innodo = numInodo;
+                            string n = name.toStdString();
+
+                            for(int g = 0; g < 12; g++)
+                            {
+                                carpeta.b_content[y].b_name[g] = NULL;
+                            }
+                            for(int z = 0; z < n.size(); z++)
+                            {
+                                carpeta.b_content[y].b_name[z] = n[z];
+                            }
+
+                            fseek(file,block.s_block_start,SEEK_SET);
+                            fseek(file,apuntador.b_pointers[x]*block.s_block_size,SEEK_CUR);
+                            fwrite(&carpeta,block.s_block_size,1,file);//escribimos el bloque carpeta actualizada
+
+                            fseek(file,usuario.particion.part_start,SEEK_SET);
+                            fwrite(&block,sizeof(struct SuperBloque),1,file);
+                            fclose(file);
+                            return;
+                        }
+                    }
+                }
+                else if(apuntador.b_pointers[x] == -1 && espacioDisponible == -1){
+                    espacioDisponible = x;
+                    inDoble = false;
+                    inTriple = false;
+                }
+            }
+
+            if(espacioDisponible != -1)
+            {
+                //creamos un bloque carpeta-----------------------------------------------------------
+               BloqueCarpeta carpeta;
+               fseek(file,block.s_block_start,SEEK_SET);
+               int numBloque = block.s_first_blo;
+               marcarBloqueLIbre(block,file);
+               block.s_first_blo = primerBloqueLIbre(block, file);
+               block.s_free_blocks_count--;
+
+                for(int g = 0; g < 12; g++)
+                {
+                    carpeta.b_content[0].b_name[g] = NULL;
+                    carpeta.b_content[1].b_name[g] = NULL;
+                    carpeta.b_content[2].b_name[g] = NULL;
+                    carpeta.b_content[3].b_name[g] = NULL;
+                }
+                //-----------------------------------------------------------------------------------
+
+                //marcamos que usamos un bloque------------------------------------------------------
+                apuntador.b_pointers[espacioDisponible] = numBloque;
+                //-----------------------------------------------------------------------------------
+
+                carpeta.b_content[0].b_innodo = numInodo;
+                string n = name.toStdString();
+                for(int z = 0; z < n.size(); z++)
+                {
+                    carpeta.b_content[0].b_name[z] = n[z];
+                }
+;
+                //------------------------------------------------------------------------------------------
+
+                fseek(file,block.s_block_start,SEEK_SET);
+                fseek(file,innodo.i_block[12]*block.s_block_size,SEEK_CUR);
+                fwrite(&apuntador,block.s_block_size,1,file);//escribimos el innodo actualizado
+
+                fseek(file,block.s_block_start,SEEK_SET);
+                fseek(file,numBloque*block.s_block_size,SEEK_CUR);
+                fwrite(&carpeta,block.s_block_size,1,file);//escribimos el bloque carpeta actualizada
+
+                fseek(file,usuario.particion.part_start,SEEK_SET);
+                fwrite(&block,sizeof(struct SuperBloque),1,file);
+                //-------------------------------------------------------------------------------------
+                fclose(file);
+                return;
+            }
+
+        }
+        else {
+            inDoble = false;
+            inTriple = false;
+            //Apuntador---------------------------------------------------------------------------
+            BloqueApuntador apuntador = nuevoApuntador();//nuestro bloque de apuntadores simple
+            int numBloqueApuntador = block.s_first_blo;
+            marcarBloqueLIbre(block,file);
+            block.s_first_blo = primerBloqueLIbre(block, file);
+            block.s_free_blocks_count--;
+
+            innodo.i_block[12] = numBloqueApuntador;
+
+            //Carpeta-----------------------------------------------------------------------------
+            BloqueCarpeta carpeta;
+            int numBloque = block.s_first_blo;
+            marcarBloqueLIbre(block,file);
+            block.s_first_blo = primerBloqueLIbre(block, file);
+            block.s_free_blocks_count--;
+
+            apuntador.b_pointers[0] = numBloque;
+
+            for(int g = 0; g < 12; g++)
+            {
+                carpeta.b_content[0].b_name[g] = NULL;
+                carpeta.b_content[1].b_name[g] = NULL;
+                carpeta.b_content[2].b_name[g] = NULL;
+                carpeta.b_content[3].b_name[g] = NULL;
+            }
+
+            carpeta.b_content[0].b_innodo = numInodo;
+            string n = name.toStdString();
+            for(int z = 0; z < n.size(); z++)
+            {
+                carpeta.b_content[0].b_name[z] = n[z];
+            }
+
+            //------------------------------------------------------------------------------------------
+
+            fseek(file,block.s_block_start,SEEK_SET);
+            fseek(file,numBloqueApuntador*block.s_block_size,SEEK_CUR);
+            fwrite(&apuntador,block.s_block_size,1,file);
+
+            fseek(file,block.s_block_start,SEEK_SET);
+            fseek(file,numBloque*block.s_block_size,SEEK_CUR);
+            fwrite(&carpeta,block.s_block_size,1,file);//escribimos el bloque carpeta actualizada
+
+            fseek(file,usuario.particion.part_start,SEEK_SET);
+            fwrite(&block,sizeof(struct SuperBloque),1,file);
+            //-------------------------------------------------------------------------------------
+            fclose(file);
+            return;
+        }
+
+        if(innodo.i_block[13] != -1 && inDoble)
+        {
+            BloqueApuntador apuntadorDoble;
+            fseek(file,block.s_block_start,SEEK_SET);
+            fseek(file,innodo.i_block[13]*block.s_block_size,SEEK_CUR);
+            fread(&apuntadorDoble,block.s_block_size,1,file);
+
+            for(int posD = 0; posD < 16; posD++)
+            {
+                if(apuntadorDoble.b_pointers[posD] != -1)//apuntador doble contiene algo
+                {
+                    BloqueApuntador apuntador;
+                    fseek(file,block.s_block_start,SEEK_SET);
+                    fseek(file,apuntadorDoble.b_pointers[posD]*block.s_block_size,SEEK_CUR);
+                    fread(&apuntador,block.s_block_size,1,file);
+
+                    for(int x = 0; x < 16; x++)
+                    {
+                        if(apuntador.b_pointers[x] != -1)
+                        {
+                            BloqueCarpeta carpeta;
+                            fseek(file,block.s_block_start,SEEK_SET);
+                            fseek(file,apuntador.b_pointers[x]*block.s_block_size,SEEK_CUR);
+                            fread(&carpeta,block.s_block_size,1,file);//
+
+                            for(int y = 0; y < 4; y++)
+                            {
+                                if(carpeta.b_content[y].b_innodo == -1)//si hay espacio en el bloque
+                                {
+                                    inTriple = false;
+
+
+                                    carpeta.b_content[y].b_innodo = numInodo;
+                                    string n = name.toStdString();
+
+                                    for(int g = 0; g < 12; g++)
+                                    {
+                                        carpeta.b_content[y].b_name[g] = NULL;
+                                    }
+                                    for(int z = 0; z < n.size(); z++)
+                                    {
+                                        carpeta.b_content[y].b_name[z] = n[z];
+                                    }
+
+                                    fseek(file,block.s_block_start,SEEK_SET);
+                                    fseek(file,apuntador.b_pointers[x]*block.s_block_size,SEEK_CUR);
+                                    fwrite(&carpeta,block.s_block_size,1,file);//escribimos el bloque carpeta actualizada
+
+                                    fseek(file,usuario.particion.part_start,SEEK_SET);
+                                    fwrite(&block,sizeof(struct SuperBloque),1,file);
+                                    fclose(file);
+                                    return;
+                                }
+                            }
+                        }
+                        else if(apuntador.b_pointers[x] == -1 && espacioDisponible == -1){
+                            espacioDisponible = x;
+                            inDoble = false;
+                            inTriple = false;
+                        }
+                    }
+
+                    if(espacioDisponible != -1)
+                    {
+                        //creamos un bloque carpeta-----------------------------------------------------------
+                       BloqueCarpeta carpeta;
+                       fseek(file,block.s_block_start,SEEK_SET);
+                       int numBloqueCarpeta = block.s_first_blo;
+                       marcarBloqueLIbre(block,file);
+                       block.s_first_blo = primerBloqueLIbre(block, file);
+                       block.s_free_blocks_count--;
+
+                        for(int g = 0; g < 12; g++)
+                        {
+                            carpeta.b_content[0].b_name[g] = NULL;
+                            carpeta.b_content[1].b_name[g] = NULL;
+                            carpeta.b_content[2].b_name[g] = NULL;
+                            carpeta.b_content[3].b_name[g] = NULL;
+                        }
+                        //-----------------------------------------------------------------------------------
+
+                        //marcamos que usamos un bloque------------------------------------------------------
+                        apuntador.b_pointers[espacioDisponible] = numBloqueCarpeta;
+                        //-----------------------------------------------------------------------------------
+
+                        carpeta.b_content[0].b_innodo = numInodo;
+                        string n = name.toStdString();
+                        for(int z = 0; z < n.size(); z++)
+                        {
+                            carpeta.b_content[0].b_name[z] = n[z];
+                        }
+
+                        //------------------------------------------------------------------------------------------
+
+                        fseek(file,block.s_block_start,SEEK_SET);
+                        fseek(file,apuntadorDoble.b_pointers[posD]*block.s_block_size,SEEK_CUR);
+                        fwrite(&apuntador,block.s_block_size,1,file);//escribimos el innodo actualizado
+
+                        fseek(file,block.s_block_start,SEEK_SET);
+                        fseek(file,numBloqueCarpeta*block.s_block_size,SEEK_CUR);
+                        fwrite(&carpeta,block.s_block_size,1,file);//escribimos el bloque carpeta actualizada
+
+                        fseek(file,usuario.particion.part_start,SEEK_SET);
+                        fwrite(&block,sizeof(struct SuperBloque),1,file);
+                        //-------------------------------------------------------------------------------------
+                        fclose(file);
+                        return;
+                    }
+                }
+                else if(apuntadorDoble.b_pointers[posD] == -1 && espacioDisponible == -1){
+                    espacioDisponible = posD;
+                    inDoble = false;
+                    inTriple = false;
+                }
+            }
+
+            if(espacioDisponible != -1)
+            {
+                BloqueApuntador apuntador = nuevoApuntador();//nuestro bloque de apuntadores simple
+                int numBloqueApuntador = block.s_first_blo;
+                marcarBloqueLIbre(block,file);
+                block.s_first_blo = primerBloqueLIbre(block, file);
+                block.s_free_blocks_count--;
+
+                apuntadorDoble.b_pointers[espacioDisponible] = numBloqueApuntador;
+
+                //creamos un bloque carpeta-----------------------------------------------------------
+               BloqueCarpeta carpeta;
+               fseek(file,block.s_block_start,SEEK_SET);
+               int numBloque = block.s_first_blo;
+               marcarBloqueLIbre(block,file);
+               block.s_first_blo = primerBloqueLIbre(block, file);
+               block.s_free_blocks_count--;
+
+                for(int g = 0; g < 12; g++)
+                {
+                    carpeta.b_content[0].b_name[g] = NULL;
+                    carpeta.b_content[1].b_name[g] = NULL;
+                    carpeta.b_content[2].b_name[g] = NULL;
+                    carpeta.b_content[3].b_name[g] = NULL;
+                }
+                //-----------------------------------------------------------------------------------
+
+                //marcamos que usamos un bloque------------------------------------------------------
+                apuntador.b_pointers[0] = numBloque;
+                //-----------------------------------------------------------------------------------
+
+                carpeta.b_content[0].b_innodo = numInodo;
+                string n = name.toStdString();
+                for(int z = 0; z < n.size(); z++)
+                {
+                    carpeta.b_content[0].b_name[z] = n[z];
+                }
+
+                //------------------------------------------------------------------------------------------
+
+                fseek(file,block.s_block_start,SEEK_SET);
+                fseek(file,innodo.i_block[13]*block.s_block_size,SEEK_CUR);
+                fwrite(&apuntadorDoble,block.s_block_size,1,file);//escribimos el apuntador actualizado
+
+                fseek(file,block.s_block_start,SEEK_SET);
+                fseek(file,numBloqueApuntador*block.s_block_size,SEEK_CUR);
+                fwrite(&apuntador,block.s_block_size,1,file);//escribimos el apuntador actualizado
+
+                fseek(file,block.s_block_start,SEEK_SET);
+                fseek(file,numBloque*block.s_block_size,SEEK_CUR);
+                fwrite(&carpeta,block.s_block_size,1,file);//escribimos el bloque carpeta actualizada
+
+                fseek(file,usuario.particion.part_start,SEEK_SET);
+                fwrite(&block,sizeof(struct SuperBloque),1,file);
+                //-------------------------------------------------------------------------------------
+                fclose(file);
+                return;
+            }
+        }
+        else {
+            inTriple = false;
+            //ApuntadorDoble----------------------------------------------------------------------
+            BloqueApuntador apuntador = nuevoApuntador();//nuestro bloque de apuntadores simple
+            int numBloqueApuntador = block.s_first_blo;
+            marcarBloqueLIbre(block,file);
+            block.s_first_blo = primerBloqueLIbre(block, file);
+            block.s_free_blocks_count--;
+
+            innodo.i_block[13] = numBloqueApuntador;
+
+            //Apuntador---------------------------------------------------------------------------
+            BloqueApuntador nuevoAp = nuevoApuntador();//nuestro bloque de apuntadores simple
+            int numNuevoBloqueApuntador = block.s_first_blo;
+            marcarBloqueLIbre(block,file);
+            block.s_first_blo = primerBloqueLIbre(block, file);
+            block.s_free_blocks_count--;
+
+            apuntador.b_pointers[0] = numNuevoBloqueApuntador;
+
+            //Carpeta-----------------------------------------------------------------------------
+            BloqueCarpeta carpeta;
+            int numBloque = block.s_first_blo;
+            marcarBloqueLIbre(block,file);
+            block.s_first_blo = primerBloqueLIbre(block, file);
+            block.s_free_blocks_count--;
+
+            nuevoAp.b_pointers[0] = numBloque;
+
+            for(int g = 0; g < 12; g++)
+            {
+                carpeta.b_content[0].b_name[g] = NULL;
+                carpeta.b_content[1].b_name[g] = NULL;
+                carpeta.b_content[2].b_name[g] = NULL;
+                carpeta.b_content[3].b_name[g] = NULL;
+            }
+
+            carpeta.b_content[0].b_innodo = numInodo;
+            string n = name.toStdString();
+            for(int z = 0; z < n.size(); z++)
+            {
+                carpeta.b_content[0].b_name[z] = n[z];
+            }
+            //------------------------------------------------------------------------------------------
+
+            fseek(file,block.s_block_start,SEEK_SET);
+            fseek(file,numBloqueApuntador*block.s_block_size,SEEK_CUR);
+            fwrite(&apuntador,block.s_block_size,1,file);
+
+            fseek(file,block.s_block_start,SEEK_SET);
+            fseek(file,numNuevoBloqueApuntador*block.s_block_size,SEEK_CUR);
+            fwrite(&nuevoAp,block.s_block_size,1,file);
+
+            fseek(file,block.s_block_start,SEEK_SET);
+            fseek(file,numBloque*block.s_block_size,SEEK_CUR);
+            fwrite(&carpeta,block.s_block_size,1,file);//escribimos el bloque carpeta actualizada
+
+            fseek(file,usuario.particion.part_start,SEEK_SET);
+            fwrite(&block,sizeof(struct SuperBloque),1,file);
+            //-------------------------------------------------------------------------------------
+            fclose(file);
+            return;
+        }
+
+        if(innodo.i_block[14] != -1 && inTriple)
+        {
+
+        }
+        else {
+
+        }
+    }
+
+    fclose(file);
 }
 
 //Metodos de ayuda-----------------------------------------------------------------------------
