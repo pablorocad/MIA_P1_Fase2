@@ -35,7 +35,7 @@
 
 /* expresiones regulares*/
 
-numero [0-9]+
+numero -?[0-9]+
 
 identificador [a-zñA-ZÑ]+
 
@@ -46,14 +46,16 @@ montar "vd"[a-zñA-ZÑ]{numero}
 
 otros \t|\r|\f
 
+%x COMENTARIO
+
 %%
 INITIAL
 {
+    "#"             { BEGIN COMENTARIO; }
 
     {otros}         {/*igore white espace*/}
 
-    {identificador}        {columna=columna+anterior;  anterior=strlen(yytext);    strcpy(yylval.TEXT,yytext); return identificador;}
-
+    {identificador}        {columna=columna+anterior;  anterior=strlen(yytext);    strcpy(yylval.TEXT,yytext); return identificador;}    
 
     {numero}      {columna=columna+anterior;  anterior=strlen(yytext);    strcpy(yylval.TEXT,yytext); return numero;}
 
@@ -67,9 +69,12 @@ INITIAL
 
      "-"              {columna=columna+anterior;  anterior=strlen(yytext);    strcpy(yylval.TEXT,yytext); return Tguion;}
 
-      " "             {columna=columna+anterior; anterior=strlen(yytext);  strcpy(yylval.TEXT,yytext); }
+     " "             {columna=columna+anterior; anterior=strlen(yytext);  strcpy(yylval.TEXT,yytext); }
 
      "\n"            {linea++; columna=0;anterior=0;}
-
 }
+
+<COMENTARIO>"\n"       { linea++; columna = 0; BEGIN INITIAL; }
+<COMENTARIO>.           {/*Ignorar*/}
+<COMENTARIO><<EOF>>    {linea++; columna = 0; BEGIN INITIAL;}
 %%

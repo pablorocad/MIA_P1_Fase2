@@ -42,12 +42,14 @@ void EjecutarComando(string n){
                    }else{
                        cout<<"Se encontraron errores en el comando especificado"<<endl;
                    }
+
 }
 
 
 int main(int argc, char *argv[])
 {
         QCoreApplication a(argc, argv);
+
             char cadena1[500];
             while(true){
                 cout<<"Ingrese el comando para ejecutar"<<endl;

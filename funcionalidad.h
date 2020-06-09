@@ -34,6 +34,9 @@ struct EBR{
     char part_name[16];
 };
 
+struct partExt{
+    EBR logica[20];
+};
 
 struct MBR_Partition{
     char part_status = '0';
@@ -55,6 +58,7 @@ struct MBR{
 struct MOUNT_NUM{
     bool montado = false;
     MBR_Partition particion;
+    EBR logica;
 };
 
 struct MOUNT_LETRA{
@@ -136,6 +140,10 @@ public:
     void Ejecutar(Nodo *temp);
     QHash<QString,QString> parametros(Nodo *temp);
 
+    //METODOS FASE 1--------------------------------------------------------------------------------------------------------
+    void crearDiscoNuevo(QStringList pathAux);
+
+    //METODOS FASE 2--------------------------------------------------------------------------------------------------------
     void formatearParticion(QHash<QString,QString> par);
 
     int buscarInnodo(QStringList pathAux);//Metodo para buscar un innodo con un path

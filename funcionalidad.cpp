@@ -11,7 +11,7 @@ void Funcionalidad::Ejecutar(Nodo *temp){
             Ejecutar(temp->hijo.takeFirst());
         }
     }
-    else if(temp->token == "mkdisk")
+    else if(temp->token.toLower() == "mkdisk")
     {//Si viene la creacion de un disco
 
         QHash<QString,QString> par = parametros(temp->hijo.first());//Tomamos todos nuestros parametros
@@ -22,9 +22,22 @@ void Funcionalidad::Ejecutar(Nodo *temp){
         else if(!par.contains("path")){
             cout << "Falta el parametro PATH en la creacion de disco | linea: " << temp->linea << " columna: " << temp->columna << endl;
         }else{
+            QString rutaAux = par.value("path");
+            rutaAux.replace("\"","");
+            QStringList listaPath = rutaAux.split('/');
+
+            QString rutaTemporal = "/home";
+
+            for(int x = 2; x < listaPath.size()-1; x++){
+                rutaTemporal.append("/");
+                rutaTemporal.append(listaPath.at(x));
+                mkdir(rutaTemporal.toUtf8().constData(),0777);
+            }
+
             int tamano = 1024*1024;//Tamano por defecto del disco
             FILE *file;
-            file = fopen(par.value("path").toUtf8().constData(),"wb+");
+
+            file = fopen(rutaAux.toUtf8().constData(),"wb+");
 
             if(par.contains("unit") && par.value("unit") == "K"){//si cambian el tipo de medida
                 tamano = 1024;
@@ -66,7 +79,7 @@ void Funcionalidad::Ejecutar(Nodo *temp){
 
 
             //--------------------------COPIA---------------------------------------
-            QString path_c = par.value("path").split(".")[0];
+            QString path_c = rutaAux.split(".")[0];
             path_c += "_ra1.disk";
             file = fopen(path_c.toUtf8().constData(),"wb+");
             fseek(file,tamano,SEEK_SET);
@@ -76,15 +89,99 @@ void Funcionalidad::Ejecutar(Nodo *temp){
             fclose(file);
         }
     }
-    else if(temp->token == "rmdisk"){
+    else if(temp->token.toLower() == "rmdisk"){
         QHash<QString,QString> par = parametros(temp->hijo.first());//Tomamos todos nuestros parametros
         //QHash<QString,QString> par2 = parametros(temp);
-        remove(par.value("path").toUtf8().constData());
+        QString rutaAux = par.value("path");
+        rutaAux.replace("\"","");
+        if(remove(rutaAux.toUtf8().constData()) != 0){
+            cout << "ERROR: no se encontro el disco: " << rutaAux.toStdString() << endl;
+        }
+        else{
+            cout << "Disco eliminado" << endl;
+        }
     }
-    else if(temp->token == "fdisk")
+    else if(temp->token.toLower() == "fdisk")
     {//Crear Particion----------------------------------------------------------------
         QHash<QString,QString> par = parametros(temp->hijo.first());//Tomamos todos nuestros parametros
-        if(!par.contains("delete"))
+        if(par.contains("add")){
+            if(!par.contains("path"))
+            {
+                cout << "Falta el parametro PATH en la creacion de disco | linea: " << temp->linea << " columna: " << temp->columna << endl;
+            }
+            else if(!par.contains("unit"))
+            {
+                cout << "Falta el parametro UNIT en la creacion de disco | linea: " << temp->linea << " columna: " << temp->columna << endl;
+            }
+            else if(!par.contains("name"))
+            {
+                cout << "Falta el parametro NAME en la creacion de disco | linea: " << temp->linea << " columna: " << temp->columna << endl;
+            }
+            else{
+                int add = par.value("add").toInt();
+                MBR information;
+                string namePart(par.value("name").toStdString());
+
+                FILE *file;
+                file = fopen(par.value("path").toUtf8().constData(),"rb+");
+                fread(&information,sizeof(struct MBR),1,file);
+
+                int unit = 1024;
+                if(par.value("unit") == "M"){
+                    unit = 1024*1024;
+                }
+                else if(par.value("unit") == "B"){
+                    unit = 1;
+                }
+
+                add = add*unit;
+
+                for(int x = 0; x < 4; x++){
+                    if(information.mbr_partition[x].part_type != 'E'){
+                        string nameAux(information.mbr_partition[x].part_name);
+                        if(namePart == nameAux){
+                            if(add < 0){
+                                int tamanio = information.mbr_partition[x].part_size + add;
+                                if(tamanio > 0){
+                                    information.mbr_partition[x].part_size = tamanio;
+                                    fseek(file,0,SEEK_SET);
+                                    fwrite(&information,sizeof(struct MBR),1,file);
+                                    break;
+                                }else{
+                                    cout << "Se esta eliminando mas espacio del tamaño de la particion" << endl;
+                                }
+                            }
+                        }
+                    }
+                    else{
+                        partExt extendida;
+                        fseek(file,information.mbr_partition[x].part_start,SEEK_SET);
+                        fread(&extendida,sizeof(struct partExt),1,file);
+
+                        for(int y = 0; y < 20; y++){
+                            string nameAux(extendida.logica[y].part_name);
+
+                            if(namePart == nameAux){
+                                if(add < 0){
+                                    int tamanio = extendida.logica[y].part_size + add;
+                                    if(tamanio > 0){
+                                        extendida.logica[y].part_size = tamanio;
+                                        fseek(file,information.mbr_partition[x].part_start,SEEK_SET);
+                                        fwrite(&extendida,sizeof(struct partExt),1,file);
+                                        break;
+                                    }else{
+                                        cout << "Se esta eliminando mas espacio del tamaño de la particion" << endl;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                fclose(file);
+            }
+        }
+        else if(!par.contains("delete"))
         {
 
             if(!par.contains("size"))
@@ -148,10 +245,21 @@ void Funcionalidad::Ejecutar(Nodo *temp){
 
                 //Insertar particion---------------------------------------------------------------------------------
                 FILE *file;
-                file = fopen(par.value("path").toUtf8().constData(),"rb+");
+                QString path =par.value("path");
+                path.replace("\"","");
+                file = fopen(path.toUtf8().constData(),"rb+");
+
+                FILE *file_ra1;
+                QStringList path_ra1_list = path.split(".");
+                QString path_ra1 = path_ra1_list[0];
+                path_ra1.append("_ra1.disk");
+                file_ra1 = fopen(path_ra1.toUtf8().constData(),"rb+");
 
                 MBR information;
                 fread(&information,sizeof(struct MBR),1,file);
+
+                //MBR information2;
+                //fread(&information2,sizeof(struct MBR),1,file_ra1);
 
                 string fitAux(information.disk_fit);
                 int start;
@@ -191,6 +299,9 @@ void Funcionalidad::Ejecutar(Nodo *temp){
 
                                         fseek(file,0,SEEK_SET);//Nos movemos al inicio del disco
                                         fwrite(&information,sizeof(struct MBR),1,file);//escribimos la nueva informacion
+
+                                        fseek(file_ra1,0,SEEK_SET);//Nos movemos al inicio del disco
+                                        fwrite(&information,sizeof(struct MBR),1,file_ra1);//escribimos la nueva informacion
                                     }
                                     else {
                                         cout << "No pueden crearse mas particiones, elimine una de las existentes" << endl;
@@ -243,6 +354,9 @@ void Funcionalidad::Ejecutar(Nodo *temp){
 
                                 fseek(file,0,SEEK_SET);//Nos movemos al inicio del disco
                                 fwrite(&information,sizeof(struct MBR),1,file);//escribimos la nueva informacion
+
+                                fseek(file_ra1,0,SEEK_SET);//Nos movemos al inicio del disco
+                                fwrite(&information,sizeof(struct MBR),1,file_ra1);//escribimos la nueva informacion
                             }
                             else {
                                 cout << "No pueden crearse mas particiones, elimine una de las existentes" << endl;
@@ -259,7 +373,8 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                             {
                                 aux2 = information.mbr_partition[x].part_start;//aux2 se movera entre los espacios libres
                                 int resta = aux2 - aux1;
-                                if(((resta) >= information_part.part_size) && ((resta) > worstStart) && aux2 < information.mbr_tamano)                            {
+                                if(((resta) >= information_part.part_size) && ((resta) > worstStart))
+                                {
                                     start = aux1;
                                     worstStart = resta;
                                 }
@@ -288,6 +403,9 @@ void Funcionalidad::Ejecutar(Nodo *temp){
 
                                 fseek(file,0,SEEK_SET);//Nos movemos al inicio del disco
                                 fwrite(&information,sizeof(struct MBR),1,file);//escribimos la nueva informacion
+
+                                fseek(file_ra1,0,SEEK_SET);//Nos movemos al inicio del disco
+                                fwrite(&information,sizeof(struct MBR),1,file_ra1);//escribimos la nueva informacion
                             }
                             else {
                                 cout << "No pueden crearse mas particiones, elimine una de las existentes" << endl;
@@ -300,42 +418,54 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                         information.mbr_partition[0] = information_part;
                         fseek(file,0,SEEK_SET);//Nos movemos al inicio del disco
                         fwrite(&information,sizeof(struct MBR),1,file);//escribimos la nueva informacion
+
+                        fseek(file_ra1,0,SEEK_SET);//Nos movemos al inicio del disco
+                        fwrite(&information,sizeof(struct MBR),1,file_ra1);//escribimos la nueva informacion
                     }
 
                     if(information_part.part_type == 'E')
                     {
-                        fseek(file,sizeof(struct MBR)+1,SEEK_SET);//nos movemos a la posicion de la extendida
+
                         EBR information_ext[20];
+                        partExt extendida;
 
                         for(int x = 0; x < 20; x++)
                         {
-                            information_ext[x].part_start = information_part.part_start + information_part.part_size;
+                            extendida.logica[x].part_start = information_part.part_start + information_part.part_size;
                         }
 
-                        fwrite(&information_ext,sizeof(information_ext),1,file);
+                        fseek(file,0,SEEK_SET);
+                        //fwrite(&information,sizeof (struct MBR),1,file);
 
-                        //COPIA--------------------------------
-                        QString path_c = par.value("path").split(".")[0];
-                        path_c += "_ra1.disk";
-                        FILE *fil = fopen(path_c.toUtf8().constData(),"wb+");
-                        fseek(fil,sizeof(struct MBR)+1,SEEK_SET);
-                        fwrite(&information_ext,sizeof (information_ext),1,fil);
-                        fclose(fil);
+                        fseek(file,information_part.part_start,SEEK_SET);//nos movemos a la posicion de la extendida
+
+                        fwrite(&extendida,sizeof(struct partExt),1,file);
+
+
+                        //fseek(file,0,SEEK_SET);
+                        //fwrite(&information,sizeof (struct MBR),1,file);
+
+                        fseek(file_ra1,information_part.part_start,SEEK_SET);//nos movemos a la posicion de la extendida
+                        fwrite(&extendida,sizeof(struct partExt),1,file_ra1);
+
                     }
                 }
                 else
                 {
                     bool s = true;
-                    EBR extAux[20];
+                    //EBR extAux[20];
+                    partExt extendida;
                     for (MBR_Partition part : information.mbr_partition) {
                         if(part.part_type == 'E')
                         {
-                            fseek(file,sizeof(struct MBR)+1,SEEK_SET);
-                            fread(&extAux,sizeof(extAux),1,file);
+                            fseek(file,part.part_start,SEEK_SET);
+                            fread(&extendida,sizeof(struct partExt),1,file);
 
-                            string fitExt(part.part_fit);
+                            QString fitExt = "";
+                            fitExt.append(part.part_fit[0]);
+                            fitExt.append(part.part_fit[1]);
 
-                            if(extAux[0].part_size != 0)
+                            if(extendida.logica[0].part_size != 0)
                             {//si el primero no esta vacio hacemos el proceso
                                 if(fitExt == "FF")
                                 {
@@ -343,18 +473,22 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                                     aux1 = part.part_start;//aux1 se movera al inicio de cada particion
 
                                     for(int x = 0; x < 20; x++){
-                                        aux2 = extAux[x].part_start;//aux2 se movera entre los espacios libres
+                                        aux2 = extendida.logica[x].part_start;//aux2 se movera entre los espacios libres
 
                                         if((aux2 - aux1) >= ext.part_size)
                                         {
                                             start = aux1;
                                             ext.part_start = start;
-                                            extAux[x].part_next = start;
+
+                                            //if(x > 0){
+                                                //extendida.logica[x-1].part_next = start;
+                                            //}
+                                            //extendida.logica[x].part_next = start;
 
                                             int indice = -1;
                                             for(int x = 0; x < 20; x++)//Buscaremos un espacio libre
                                             {
-                                                if(extAux[x].part_size == 0)
+                                                if(extendida.logica[x].part_size == 0)
                                                 {
                                                     indice = x;
                                                     break;
@@ -363,13 +497,22 @@ void Funcionalidad::Ejecutar(Nodo *temp){
 
                                             if(indice != -1)
                                             {
-                                                extAux[indice] = ext;
+                                                extendida.logica[indice] = ext;
+
+                                                if(x > 0){
+                                                    extendida.logica[indice-1].part_next = start;
+                                                }
+                                                //extendida.logica[x].part_next = start;
+
                                                 //Ordenamos el arreglo
                                                 int n = 20;
-                                                bubbleSort(extAux,n);
+                                                bubbleSort(extendida.logica,n);
 
-                                                fseek(file,sizeof (struct MBR) + 1,SEEK_SET);//Nos movemos al inicio del disco
-                                                fwrite(&extAux,sizeof(extAux),1,file);//escribimos la nueva informacion
+                                                fseek(file,part.part_start,SEEK_SET);//Nos movemos al inicio del disco
+                                                fwrite(&extendida,sizeof(struct partExt),1,file);//escribimos la nueva informacion
+
+                                                fseek(file_ra1,part.part_start,SEEK_SET);//Nos movemos al inicio del disco
+                                                fwrite(&extendida,sizeof(struct partExt),1,file_ra1);//escribimos la nueva informacion
                                             }
                                             else {
                                                 cout << "No pueden crearse mas particiones, elimine una de las existentes" << endl;
@@ -378,11 +521,11 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                                             break;
                                         }
                                         else{
-                                            aux1 += extAux[x].part_size;//movemos aux1
+                                            aux1 += extendida.logica[x].part_size;//movemos aux1
                                         }
                                     }
                                 }
-                                else if(fitAux == "BF")//Best Fit
+                                else if(fitExt == "BF")//Best Fit
                                 {
                                     int bestStart = part.part_start+part.part_size;
                                     int aux1, aux2 = 0;//Variables con las que nos moveremos en el disco
@@ -391,14 +534,14 @@ void Funcionalidad::Ejecutar(Nodo *temp){
 
                                     for(int x = 0; x < 20; x++)
                                     {
-                                        aux2 = extAux[x].part_start;//aux2 se movera entre los espacios libres
+                                        aux2 = extendida.logica[x].part_start;//aux2 se movera entre los espacios libres
                                         int resta = aux2 - aux1;
                                         if(((resta) >= ext.part_size) && ((resta) < bestStart))
                                         {
                                             start = aux1;
                                             bestStart = resta;
                                         }
-                                        aux1 = aux2 + extAux[x].part_size;//movemos aux1
+                                        aux1 = aux2 + extendida.logica[x].part_size;//movemos aux1
 
                                     }
 
@@ -408,7 +551,7 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                                     int indice = -1;
                                     for(int x = 0; x < 20; x++)//Buscaremos un espacio libre
                                     {
-                                        if(extAux[x].part_size == 0)
+                                        if(extendida.logica[x].part_size == 0)
                                         {
                                             indice = x;
                                             break;
@@ -417,20 +560,23 @@ void Funcionalidad::Ejecutar(Nodo *temp){
 
                                     if(indice != -1)
                                     {
-                                        extAux[indice] = ext;
-                                        extAux[indice-1].part_next = start;
+                                        extendida.logica[indice] = ext;
+                                        extendida.logica[indice-1].part_next = start;
                                         //Ordenamos el arreglo
                                         int n = 20;
-                                        bubbleSort(extAux,n);
+                                        bubbleSort(extendida.logica,n);
 
-                                        fseek(file,sizeof (struct MBR)+1,SEEK_SET);//Nos movemos al inicio del disco
-                                        fwrite(&extAux,sizeof(extAux),1,file);//escribimos la nueva informacion
+                                        fseek(file,part.part_start,SEEK_SET);//Nos movemos al inicio del disco
+                                        fwrite(&extendida,sizeof(struct partExt),1,file);//escribimos la nueva informacion
+
+                                        fseek(file_ra1,part.part_start,SEEK_SET);//Nos movemos al inicio del disco
+                                        fwrite(&extendida,sizeof(struct partExt),1,file_ra1);//escribimos la nueva informacion
                                     }
                                     else {
                                         cout << "No pueden crearse mas particiones, elimine una de las existentes" << endl;
                                     }
                                 }
-                                else if (fitAux == "WF") //Worst Fit
+                                else if (fitExt == "WF") //Worst Fit
                                 {
                                     int worstStart = 0;
                                     int aux1, aux2 = 0;//Variables con las que nos moveremos en el disco
@@ -439,14 +585,14 @@ void Funcionalidad::Ejecutar(Nodo *temp){
 
                                     for(int x = 0; x < 20; x++)
                                     {
-                                        aux2 = extAux[x].part_start;//aux2 se movera entre los espacios libres
+                                        aux2 = extendida.logica[x].part_start;//aux2 se movera entre los espacios libres
                                         int resta = aux2 - aux1;
-                                        if(((resta) >= ext.part_size) && ((resta) > worstStart) && aux2 < (part.part_start+part.part_size))
+                                        if(((resta) >= ext.part_size) && ((resta) > worstStart))
                                         {
                                             start = aux1;
                                             worstStart = resta;
                                         }
-                                        aux1 = aux2 + extAux[x].part_size;//movemos aux1
+                                        aux1 = aux2 + extendida.logica[x].part_size;//movemos aux1
 
                                     }
 
@@ -455,7 +601,7 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                                     int indice = -1;
                                     for(int x = 0; x < 20; x++)//Buscaremos un espacio libre
                                     {
-                                        if(extAux[x].part_size == 0)
+                                        if(extendida.logica[x].part_size == 0)
                                         {
                                             indice = x;
                                             break;
@@ -464,14 +610,17 @@ void Funcionalidad::Ejecutar(Nodo *temp){
 
                                     if(indice != -1)
                                     {
-                                        extAux[indice] = ext;
-                                        extAux[indice-1].part_next = start;
+                                        extendida.logica[indice] = ext;
+                                        extendida.logica[indice-1].part_next = start;
                                         //Ordenamos el arreglo
                                         int n = 4;
-                                        bubbleSort(extAux,n);
+                                        bubbleSort(extendida.logica,n);
 
-                                        fseek(file,sizeof (struct MBR)+1,SEEK_SET);//Nos movemos al inicio del disco
-                                        fwrite(&extAux,sizeof(extAux),1,file);//escribimos la nueva informacion
+                                        fseek(file,part.part_start,SEEK_SET);//Nos movemos al inicio del disco
+                                        fwrite(&extendida,sizeof(struct partExt),1,file);//escribimos la nueva informacion
+
+                                        fseek(file_ra1,part.part_start,SEEK_SET);//Nos movemos al inicio del disco
+                                        fwrite(&extendida,sizeof(struct partExt),1,file_ra1);//escribimos la nueva informacion
                                     }
                                     else {
                                         cout << "No pueden crearse mas particiones, elimine una de las existentes" << endl;
@@ -481,17 +630,20 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                             else{//si esta vacio no existe ninguna particion
                                 start = part.part_start;
                                 ext.part_start = start;
-                                extAux[0] = ext;
-                                fseek(file,sizeof(struct MBR)+1,SEEK_SET);//Nos movemos al inicio del disco
-                                fwrite(&extAux,sizeof(extAux),1,file);//escribimos la nueva informacion
+                                extendida.logica[0] = ext;
+                                fseek(file,part.part_start,SEEK_SET);//Nos movemos al inicio del disco
+                                fwrite(&extendida,sizeof(struct partExt),1,file);//escribimos la nueva informacion
+
+                                fseek(file_ra1,part.part_start,SEEK_SET);//Nos movemos al inicio del disco
+                                fwrite(&extendida,sizeof(struct partExt),1,file_ra1);//escribimos la nueva informacion
                             }
 
-                            QString path_c = par.value("path").split(".")[0];
+                            /*QString path_c = par.value("path").split(".")[0];
                             path_c += "_ra1.disk";
                             FILE *f;
                             f = fopen(path_c.toUtf8().constData(),"wb+");
                             fwrite(&extAux,sizeof(extAux),1,f);//escribimos la nueva informacion
-                            fclose(f);
+                            fclose(f);*/
 
                             s = false;
                         }
@@ -506,13 +658,14 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                 }
 
                 fclose(file);
+                fclose(file_ra1);
 
                 //COPIA-----------------------------------------------------------------------------------------
-                QString path_c = par.value("path").split(".")[0];
+                /*QString path_c = par.value("path").split(".")[0];
                 path_c += "_ra1.disk";
                 file = fopen(path_c.toUtf8().constData(),"wb+");
                 fwrite(&information,sizeof(struct MBR),1,file);//escribimos la nueva informacion
-                fclose(file);
+                fclose(file);*/
             }
 
         }
@@ -534,6 +687,12 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                 file = fopen(par.value("path").toUtf8().constData(),"rb+");
                 fread(&information,sizeof (struct MBR),1,file);
 
+                FILE *file_ra1;
+                QStringList path_ra1_list = par.value("path").split(".");
+                QString path_ra1 = path_ra1_list[0];
+                path_ra1.append("_ra1.disk");
+                file_ra1 = fopen(path_ra1.toUtf8().constData(),"rb+");
+
                 string nameCon(par.value("name").toStdString());
                 bool s1 = true;
                 bool s2 = true;
@@ -548,16 +707,14 @@ void Funcionalidad::Ejecutar(Nodo *temp){
 
                         fseek(file,0,SEEK_SET);
                         fwrite(&information,sizeof(struct MBR),1,file);
+
+                        fseek(file_ra1,0,SEEK_SET);
+                        fwrite(&information,sizeof(struct MBR),1,file_ra1);
                         s1 = false;
                         s2 = false;
 
-                        //COPIA-----------------------------------------------------------------------------------------
-                        QString path_c = par.value("path").split(".")[0];
-                        path_c += "_ra1.disk";
-                        FILE *f;
-                        f = fopen(path_c.toUtf8().constData(),"wb+");
-                        fwrite(&information,sizeof(struct MBR),1,f);//escribimos la nueva informacion
-                        fclose(f);
+                        fclose(file);
+                        fclose(file_ra1);
 
                         break;
                     }
@@ -571,29 +728,28 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                     {
                         if(part.part_type == 'E')
                         {
-                            EBR ext[20];
-                            fseek(file,sizeof (struct MBR)+1,SEEK_SET);
-                            fread(&ext,sizeof (ext),1,file);
+                            partExt extendida;
+                            fseek(file,part.part_start,SEEK_SET);
+                            fread(&extendida,sizeof (struct partExt),1,file);
                             EBR nuevoExt;
                             for(int x = 0; x< 20; x++)//buscaremos la particion
                             {
-                                string nameDisk(ext[x].part_name);
+                                string nameDisk(extendida.logica[x].part_name);
                                 if(nameCon == nameDisk){
                                     nuevoExt.part_start = part.part_start+part.part_size;
-                                    ext[x] = nuevoExt;
-                                    bubbleSort(ext,20);
+                                    extendida.logica[x] = nuevoExt;
+                                    bubbleSort(extendida.logica,20);
 
-                                    fseek(file,sizeof (struct MBR)+1,SEEK_SET);
-                                    fwrite(&ext,sizeof(ext),1,file);
+                                    fseek(file,part.part_start,SEEK_SET);
+                                    fwrite(&extendida,sizeof(struct partExt),1,file);
+
+                                    fseek(file_ra1,part.part_start,SEEK_SET);
+                                    fwrite(&extendida,sizeof(struct partExt),1,file_ra1);
                                     s2 = false;
 
-                                    QString path_c = par.value("path").split(".")[0];
-                                    path_c += "_ra1.disk";
-                                    FILE *f;
-                                    f = fopen(path_c.toUtf8().constData(),"wb+");
-                                    fseek(f,sizeof (struct MBR)+1,SEEK_SET);
-                                    fwrite(&ext,sizeof(ext),1,f);//escribimos la nueva informacion
-                                    fclose(f);
+
+                                    fclose(file);
+                                    fclose(file_ra1);
 
                                     break;
                                 }
@@ -611,7 +767,7 @@ void Funcionalidad::Ejecutar(Nodo *temp){
             }
         }
     }
-    else if(temp->token == "exec"){
+    else if(temp->token.toLower() == "exec"){
         QHash<QString,QString> par = parametros(temp->hijo.first());//Tomamos todos nuestros parametros
         if(!par.contains("path"))
         {
@@ -633,7 +789,7 @@ void Funcionalidad::Ejecutar(Nodo *temp){
         }
 
     }
-    else if(temp->token == "mount")
+    else if(temp->token.toLower() == "mount")
     {
         QHash<QString,QString> par = parametros(temp->hijo.first());
         if(!par.contains("path"))
@@ -645,50 +801,115 @@ void Funcionalidad::Ejecutar(Nodo *temp){
             cout << "Falta el parametro NAME en montar | linea: " << temp->linea << " columna: " << temp->columna << endl;
         }
         else{
+
+        QString ruta = par.value("path");
+        ruta.replace("\"","");
+
         MBR information;
         FILE *file;
-        file = fopen(par.value("path").toUtf8().constData(), "rb+");
+        file = fopen(ruta.toUtf8().constData(), "rb+");
         fread(&information,sizeof(struct MBR),1,file);
-
 
         for(int x = 0; x < 4; x++)
         {
             QString n(information.mbr_partition[x].part_name);
-            if(n == par.value("name"))
+
+            if(information.mbr_partition[x].part_type != 'E')
             {
-                for(int m = 0; m < 27; m++)
+                if(n == par.value("name"))
                 {
-                    if(mount[m].path == "")
-                    {
-                        mount[m].path = par.value("path");//GUardamos el path en la letra que sera del disco
-                        mount[m].numero[0].montado = true;
-                        mount[m].numero[0].particion = information.mbr_partition[x];
 
-                        information.mbr_partition[x].part_status = '1';
-                        fseek(file,0,SEEK_SET);
-                        fwrite(&information,sizeof (struct MBR),1,file);
-                        break;
-                    }
-                    else if(mount[m].path == par.value("path"))
+                    for(int m = 0; m < 27; m++)
                     {
-                        for(int n = 0; n < 100; n++)
+                        if(mount[m].path == "")
                         {
-                            if(mount[m].numero[n].montado == false)
-                            {
-                                mount[m].numero[n].montado = true;
-                                mount[m].numero[n].particion = information.mbr_partition[x];
+                            mount[m].path = ruta;//GUardamos el path en la letra que sera del disco
+                            mount[m].numero[0].montado = true;
+                            mount[m].numero[0].particion = information.mbr_partition[x];
 
-                                information.mbr_partition[x].part_status = '1';
-                                fseek(file,0,SEEK_SET);
-                                fwrite(&information,sizeof (struct MBR),1,file);
+                            information.mbr_partition[x].part_status = '1';
+                            fseek(file,0,SEEK_SET);
+                            fwrite(&information,sizeof (struct MBR),1,file);
+                            break;
+                        }
+                        else if(mount[m].path == ruta)
+                        {
+                            for(int n = 0; n < 100; n++)
+                            {
+                                if(mount[m].numero[n].montado == false)
+                                {
+                                    mount[m].numero[n].montado = true;
+                                    mount[m].numero[n].particion = information.mbr_partition[x];
+
+                                    information.mbr_partition[x].part_status = '1';
+                                    fseek(file,0,SEEK_SET);
+                                    fwrite(&information,sizeof (struct MBR),1,file);
+                                    break;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                    break;
+                }
+
+            }
+            else
+            {
+                partExt extendida;
+
+                fseek(file,information.mbr_partition[x].part_start,SEEK_SET);
+                fread(&extendida,sizeof (struct partExt),1,file);
+
+                for(int y = 0; y < 20; y++){
+                    QString n2(extendida.logica[y].part_name);
+
+                    if(n2 == par.value("name"))
+                    {
+
+                        for(int m = 0; m < 27; m++)
+                        {
+                            if(mount[m].path == "")
+                            {
+                                mount[m].path = ruta;//Guardamos el path en la letra que sera del disco
+                                mount[m].numero[0].montado = true;
+                                //mount[m].numero[0].particion = information.mbr_partition[x];
+                                mount[m].numero[0].logica = extendida.logica[y];
+
+                                extendida.logica[y].part_status = '1';
+                                fseek(file,information.mbr_partition[x].part_start,SEEK_SET);
+                                fwrite(&extendida,sizeof (struct partExt),1,file);
+                                break;
+                            }
+                            else if(mount[m].path == ruta)
+                            {
+                                for(int n = 0; n < 100; n++)
+                                {
+                                    if(mount[m].numero[n].montado == false)
+                                    {
+
+                                        if(par.value("name") == "Part6"){
+                                            cout << " "  << endl;
+                                        }
+
+                                        mount[m].numero[n].montado = true;
+                                        //mount[m].numero[n].particion = information.mbr_partition[x];
+                                        mount[m].numero[0].logica = extendida.logica[y];
+
+                                        extendida.logica[y].part_status = '1';
+                                        fseek(file,information.mbr_partition[x].part_start,SEEK_SET);
+                                        fwrite(&extendida,sizeof (struct partExt),1,file);
+                                        break;
+                                    }
+                                }
                                 break;
                             }
                         }
                         break;
                     }
+
                 }
 
-                break;
             }
         }
 
@@ -696,7 +917,93 @@ void Funcionalidad::Ejecutar(Nodo *temp){
 
         }
     }
-    else if(temp->token == "mkgrp")
+    else if(temp->token.toLower() == "unmount"){
+        QHash<QString,QString> par = parametros(temp->hijo.first());
+        if(!par.contains("id"))
+        {
+            cout << "Falta el parametro ID en desmontar| linea: " << temp->linea << " columna: " << temp->columna << endl;
+        }
+        else{
+            int partLetra = ((int) par.value("id").split("")[3].toStdString()[0]) - 97;
+            int partNum = par.value("id").split("")[4].toInt() - 1;
+
+            MBR information;
+            FILE *file;
+            file = fopen(mount[partLetra].path.toUtf8().constData(), "rb");
+            fread(&information,sizeof(struct MBR),1,file);
+            fclose(file);
+
+
+            for(int x = 0; x < 4; x++){
+                if(information.mbr_partition[x].part_type != 'E')
+                {
+                    QString nameM(mount[partLetra].numero[partNum].particion.part_name);
+                    QString nameEsc(information.mbr_partition[x].part_name);
+                    if(nameM == nameEsc){
+                        information.mbr_partition[x].part_status = '0';
+                        file = fopen(mount[partLetra].path.toUtf8().constData(), "wb");
+                        fseek(file,0,SEEK_SET);
+                        fwrite(&information,sizeof (struct MBR),1,file);
+                        fclose(file);
+
+                        mount[partLetra].numero[partNum].montado=false;
+
+                        bool eliminar = true;
+                        for(int y = 0; y < 100; y++){
+                            if(mount[partLetra].numero[y].montado){
+                                eliminar = false;
+                                break;
+                            }
+                        }
+
+                        if(eliminar){
+                            mount[partLetra].path = "";
+                        }
+
+                        break;
+                    }
+                }
+                else{
+                    partExt extendida;
+
+                    file = fopen(mount[partLetra].path.toUtf8().constData(), "rb+");
+                    fseek(file,mount[partLetra].numero[partNum].particion.part_start,SEEK_SET);
+                    fread(&extendida,sizeof (struct partExt),1,file);
+
+                    for(int y = 0; y < 20; y++){
+                        QString nameM(mount[partLetra].numero[partNum].logica.part_name);
+                        QString nameEsc(extendida.logica[x].part_name);
+                        if(nameM == nameEsc){
+                            extendida.logica[x].part_status = '0';
+                            fseek(file,mount[partLetra].numero[partNum].particion.part_start,SEEK_SET);
+                            fwrite(&extendida,sizeof (struct partExt),1,file);
+
+                            mount[partLetra].numero[partNum].montado=false;
+
+                            bool eliminar = true;
+                            for(int y = 0; y < 100; y++){
+                                if(mount[partLetra].numero[y].montado){
+                                    eliminar = false;
+                                    break;
+                                }
+                            }
+
+                            if(eliminar){
+                                mount[partLetra].path = "";
+                            }
+
+                            break;
+                        }
+                    }
+
+                    fclose(file);
+                    break;
+                }
+            }
+
+        }
+    }
+    else if(temp->token.toLower() == "mkgrp")
     {
         QHash<QString,QString> par = parametros(temp->hijo.first());//Tomamos todos nuestros parametros
         if(!par.contains("name"))
@@ -724,7 +1031,7 @@ void Funcionalidad::Ejecutar(Nodo *temp){
 
         }
     }
-    else if(temp->token == "mkusr")
+    else if(temp->token.toLower() == "mkusr")
     {
         QHash<QString,QString> par = parametros(temp->hijo.first());//Tomamos todos nuestros parametros
         if(!par.contains("usr"))
@@ -762,7 +1069,7 @@ void Funcionalidad::Ejecutar(Nodo *temp){
             fclose(file);
         }
     }
-    else if(temp->token == "login")
+    else if(temp->token.toLower() == "login")
     {
         QHash<QString,QString> par = parametros(temp->hijo.first());//Tomamos todos nuestros parametros
         if(!par.contains("id"))
@@ -837,12 +1144,12 @@ void Funcionalidad::Ejecutar(Nodo *temp){
 
         }
     }
-    else if(temp->token == "logout")
+    else if(temp->token.toLower() == "logout")
     {
         Login nuevo;
         usuario = nuevo;
     }
-    else if(temp->token == "mkfs")//Formatear particion
+    else if(temp->token.toLower() == "mkfs")//Formatear particion
     {
         QHash<QString,QString> par = parametros(temp->hijo.first());//Tomamos todos nuestros parametros
 
@@ -855,7 +1162,7 @@ void Funcionalidad::Ejecutar(Nodo *temp){
         }
 
     }
-    else if(temp->token == "mkdir")
+    else if(temp->token.toLower() == "mkdir")
     {
         QHash<QString,QString> par = parametros(temp->hijo.first());//Tomamos todos nuestros parametros
         if(!par.contains("path"))
@@ -927,7 +1234,7 @@ void Funcionalidad::Ejecutar(Nodo *temp){
 
         }
     }
-    else if (temp->token == "mkfile")
+    else if (temp->token.toLower() == "mkfile")
     {
         QHash<QString,QString> par = parametros(temp->hijo.first());//Tomamos todos nuestros parametros
         if(!par.contains("path"))
@@ -1141,12 +1448,12 @@ void Funcionalidad::Ejecutar(Nodo *temp){
             fclose(file);
         }
     }
-    else if (temp->token == "pause")
+    else if (temp->token.toLower() == "pause")
     {
         cout << "Presione cualquier tecla para continuar" << endl;
         getchar();
     }
-    else if (temp->token == "cat")
+    else if (temp->token.toLower() == "cat")
     {
         QHash<QString,QString> par = parametros(temp->hijo.first());//Tomamos todos nuestros parametros
         if(!par.contains("file"))
@@ -1163,7 +1470,7 @@ void Funcionalidad::Ejecutar(Nodo *temp){
 
         }
     }
-    else if (temp->token == "ren")
+    else if (temp->token.toLower() == "ren")
     {
         QHash<QString,QString> par = parametros(temp->hijo.first());//Tomamos todos nuestros parametros
         if(!par.contains("path"))
@@ -1202,7 +1509,7 @@ void Funcionalidad::Ejecutar(Nodo *temp){
             fclose(file);
         }
     }
-    else if (temp->token == "recovery")
+    else if (temp->token.toLower() == "recovery")
     {
          QHash<QString,QString> par = parametros(temp->hijo.first());//Tomamos todos nuestros parametros
         if(!par.contains("id"))
@@ -1237,7 +1544,7 @@ void Funcionalidad::Ejecutar(Nodo *temp){
             fclose(file);
         }
     }
-    else if (temp->token == "loss")
+    else if (temp->token.toLower() == "loss")
     {
         QHash<QString,QString> par = parametros(temp->hijo.first());
         if(!par.contains("id"))
@@ -1276,16 +1583,16 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                 fwrite(&t,sizeof (char),1,file);
             }
 
-            fseek(file,block.s_block_start,SEEK_SET);
+            /*fseek(file,block.s_block_start,SEEK_SET);
             for(int x = 0; x < block.s_blocks_count*block.s_blocks_count; x++)
             {
                 fwrite(&t,sizeof (char),1,file);
-            }
+            }*/
 
             fclose(file);
         }
     }
-    else if (temp->token == "mv")
+    else if (temp->token.toLower() == "mv")
     {
         QHash<QString,QString> par = parametros(temp->hijo.first());
         if(!par.contains("path"))
@@ -1298,6 +1605,8 @@ void Funcionalidad::Ejecutar(Nodo *temp){
         }
         else
         {
+            string comando = "mv -path=" + par.value("path").toStdString() + "-dest=" + par.value("dest").toStdString();
+
             QString destino = par.value("dest");
             destino.replace("\"","");
             QStringList dest = destino.split('/');
@@ -1314,9 +1623,22 @@ void Funcionalidad::Ejecutar(Nodo *temp){
             int innodoActual = buscarInnodo(path);
             //cout << "";
             moverArchivo(name,innodoDestino,innodoActual);
+
+            string url = usuario.pathDisco.toStdString();
+            const char *u = url.c_str();
+            FILE *file;
+            file = fopen(u,"rb+");
+            SuperBloque block;
+            fseek(file,usuario.particion.part_start,SEEK_SET);
+            fread(&block,sizeof (struct SuperBloque),1,file);
+            if(block.s_filesystem_type == 3)
+            {
+                escribirEnJournal(comando,file);
+            }
+            fclose(file);
         }
     }
-    else if (temp->token == "edit")
+    else if (temp->token.toLower() == "edit")
     {
         QHash<QString,QString> par = parametros(temp->hijo.first());
         if(!par.contains("path"))
@@ -1350,7 +1672,7 @@ void Funcionalidad::Ejecutar(Nodo *temp){
             crearArchivo(innodo,"",path,g);
         }
     }
-    else if(temp->token == "rep"){
+    else if(temp->token.toLower() == "rep"){
         QHash<QString,QString> par = parametros(temp->hijo.first());//Tomamos todos nuestros parametros
 
         if(!par.contains("path"))
@@ -1367,10 +1689,27 @@ void Funcionalidad::Ejecutar(Nodo *temp){
         }
         else
         {
+
+            if(par.value("path") == "/home/mia/disk2.png"){
+                cout << "" << endl;
+            }
+
+            QString rutaAux = par.value("path");
+            rutaAux.replace("\"","");
+            QStringList listaPath = rutaAux.split('/');
+
+            QString rutaTemporal = "/home";
+
+            for(int x = 2; x < listaPath.size()-1; x++){
+                rutaTemporal.append("/");
+                rutaTemporal.append(listaPath.at(x));
+                mkdir(rutaTemporal.toUtf8().constData(),0777);
+            }
+
             int partLetra = ((int) par.value("id").split("")[3].toStdString()[0]) - 97;
             int partNum = par.value("id").split("")[4].toInt() - 1;
-            QString url = par.value("path").split(".")[0];
-            QString ext = par.value("path").split(".")[1];
+            QString url = rutaAux.split(".")[0];
+            QString ext = rutaAux.split(".")[1];
 
             /*QStringList pathAux = pathArchivo(par.value("path"));
             int g = pathAux.size();
@@ -1390,11 +1729,17 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                 fclose(file);
 
                 ofstream out;
+
+                QString temp = "";
                 url.append(".dot");
 
                 string ur = url.toStdString();
                 const char *u = ur.c_str();
                 out.open(u);
+                url.append("t");
+                QFile arch(url);
+                arch.open(QIODevice::WriteOnly | QIODevice::Text);
+                QTextStream out2(&arch);
 
                 if(par.value("name") == "mbr")
                 {
@@ -1420,77 +1765,273 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                     out << information2.disk_fit;
                     out << "</td></tr>\n";
 
+                    int indice = -1;
+
                     for(int x = 0; x < 4; x++)
                     {
                         if(information2.mbr_partition[x].part_status != '0')
                         {
-                            out << "<tr><td>part_status_" << x << "</td><td>";
+                            out << "<tr><td>part_status_" << (x+1) << "</td><td>";
                             out << information2.mbr_partition[x].part_status;
                             out << "</td></tr>\n";
 
-                            out << "<tr><td>part_type_" << x << "</td><td>";
+                            out << "<tr><td>part_type_" << (x+1) << "</td><td>";
                             out << information2.mbr_partition[x].part_type;
                             out << "</td></tr>\n";
 
-                            out << "<tr><td>part_fit_" << x << "</td><td>";
+                            out << "<tr><td>part_fit_" << (x+1) << "</td><td>";
                             out << information2.mbr_partition[x].part_fit[0];
                             out << information2.mbr_partition[x].part_fit[1];
                             out << "</td></tr>\n";
 
-                            out << "<tr><td>part_start_" << x << "</td><td>";
+                            out << "<tr><td>part_start_" << (x+1) << "</td><td>";
                             out << information2.mbr_partition[x].part_start;
                             out << "</td></tr>\n";
 
-                            out << "<tr><td>part_size_" << x << "</td><td>";
+                            out << "<tr><td>part_size_" << (x+1) << "</td><td>";
                             out << information2.mbr_partition[x].part_size;
                             out << "</td></tr>\n";
 
-                            out << "<tr><td>part_name_" << x << "</td><td>";
+                            out << "<tr><td>part_name_" << (x+1) << "</td><td>";
                             out << information2.mbr_partition[x].part_name;
                             out << "</td></tr>\n";
                         }
-                    }
 
+                        if(information2.mbr_partition[x].part_type == 'E'){
+                            indice = x;
+                        }
+                    }
                     out << "</TABLE>>];\n";
+
+                    if(indice != -1){
+                        partExt extendida;
+
+                        file = fopen(mount[partLetra].path.toUtf8().constData(),"rb+");
+                        fseek(file,information2.mbr_partition[indice].part_start,SEEK_SET);
+                        fread(&extendida,sizeof (struct partExt),1,file);
+                        fclose(file);
+
+                        for(int x = 0; x < 20; x++){
+                            if(extendida.logica[x].part_status == '1'){
+                                out << "ext" << (x+1) << " [label=<\n";
+                                out << "<TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\">\n";
+                                out << "<tr><td>Nombre</td><td>Valor</td></tr>\n";
+
+                                out << "<tr><td>part_status_" << (x+1) << "</td><td>";
+                                out << extendida.logica[x].part_status;
+                                out << "</td></tr>\n";
+
+                                out << "<tr><td>part_fit_" << (x+1) << "</td><td>";
+                                out << extendida.logica[x].part_fit;
+                                out << "</td></tr>\n";
+
+                                out << "<tr><td>part_start_" << (x+1) << "</td><td>";
+                                out << extendida.logica[x].part_start;
+                                out << "</td></tr>\n";
+
+                                out << "<tr><td>part_size_" << (x+1) << "</td><td>";
+                                out << extendida.logica[x].part_size;
+                                out << "</td></tr>\n";
+
+                                out << "<tr><td>part_next_" << (x+1) << "</td><td>";
+                                out << extendida.logica[x].part_next;
+                                out << "</td></tr>\n";
+
+                                out << "<tr><td>part_name_" << (x+1) << "</td><td>";
+                                out << extendida.logica[x].part_name;
+                                out << "</td></tr>\n";
+                                out << "</TABLE>>];\n";
+                            }
+                        }
+                    }
                     out << "}";
 
                 }
                 else if(par.value("name") == "disk")
                 {
-                    out << "digraph G{";
-                    out << "node [shape=record];";
-                    out << "struct1 [label=\"";
+                    temp.append("digraph G{");
+                    temp.append("node [shape=record];");
+                    temp.append("struct1 [label=\"");
+                    temp.append("MBR");
 
-                    out << "MBR";
+                    out2 << "digraph G{";
+                    out2 << "node [shape=record];";
+                    out2 << "struct1 [label=\"";
 
+                    out2 << "MBR";
+
+                    int posAnterior = 0;
+                    int porcentaje = 0;
+                    int comparar = 0;
+                    double arr = 0;
+
+                    posAnterior = sizeof (struct MBR);
                     for(int x = 0; x < 4; x++)
                     {
                         if(information2.mbr_partition[x].part_size != 0)
                         {
-                            out << "|";
+                            temp.append("|");
+                            out2 << "|";
                             if(information2.mbr_partition[x].part_type == 'P')
                             {
-                                out << "Primaria";
-                            }else{
-                                out << "{Extendida";
-                                fseek(file,sizeof (struct MBR)+1,SEEK_SET);
-                                EBR k[20];
-                                fread(&k,sizeof (k),1,file);
-                                for(int x = 0; x < 20; x++)
-                                {
-                                    if(k[x].part_size != 0){
-                                        out << "|";
-                                        out << "EBR|";
-                                        out << "Logica";
+                                comparar = information2.mbr_partition[x].part_start - posAnterior;
+                                if(comparar > 0){
+                                    temp.append("Libre");
+                                    out2 << "Libre";
+
+                                    arr = 0;
+                                    arr = ((double)comparar)/((double)(information2.mbr_tamano - sizeof (struct MBR)));
+
+                                    porcentaje = 0;
+                                    porcentaje = (int)(arr*100);
+
+                                    out2 << " \\n " << porcentaje << "% del disco |";
+                                    temp.append("\\n");
+                                    temp.append(QString::number(porcentaje));
+                                    temp.append("% del disco |");
+                                }
+                                posAnterior = information2.mbr_partition[x].part_start + information2.mbr_partition[x].part_size;
+                                out2 << "Primaria";
+                                temp.append("Primaria");
+
+                                arr = 0;
+                                arr = ((double)information2.mbr_partition[x].part_size)/((double)(information2.mbr_tamano - sizeof (struct MBR)));
+
+                                porcentaje = 0;
+                                porcentaje = (int)(arr*100);
+
+                                out2 << " \\n " << porcentaje << "% del disco";
+                                temp.append("\\n");
+
+                                temp.append(QString::number(porcentaje));
+                                temp.append("% del disco |");
+
+                            }
+                            else{
+
+                                comparar = information2.mbr_partition[x].part_start - posAnterior;
+                                if(comparar > 0){
+                                    out2 << "Libre";
+                                    temp.append("Libre");
+
+                                    arr = 0;
+                                    arr = ((double)comparar)/((double)(information2.mbr_tamano - sizeof (struct MBR)));
+
+                                    porcentaje = 0;
+                                    porcentaje = (int)(arr*100);
+
+                                    out2 << " \\n " << porcentaje << "% del disco |";
+                                    temp.append("\\n");
+                                    temp.append(QString::number(porcentaje));
+                                    temp.append("% del disco |");
+                                }
+                                posAnterior = information2.mbr_partition[x].part_start + information2.mbr_partition[x].part_size;
+                                out2 << "{Extendida";
+                                temp.append("{Extendida");
+
+                                arr = 0;
+                                arr = ((double)information2.mbr_partition[x].part_size)/((double)(information2.mbr_tamano - sizeof (struct MBR)));
+
+                                porcentaje = 0;
+                                porcentaje = (int)(arr*100);
+
+                                out2 << " \\n " << porcentaje << "% del disco";
+                                temp.append("\\n");
+                                temp.append(QString::number(porcentaje));
+                                temp.append("% del disco |");
+
+                                partExt extendida;
+                                file = fopen(mount[partLetra].path.toUtf8().constData(),"rb+");
+                                fseek(file,information2.mbr_partition[x].part_start,SEEK_SET);
+                                fread(&extendida,sizeof (struct partExt),1,file);
+                                fclose(file);
+
+                                out2 << "|{";
+                                temp.append("|{");
+                                int posAnterior2 = information2.mbr_partition[x].part_start;
+                                for(int y = 0; y < 20; y++){
+
+                                    if(extendida.logica[y].part_size != 0){
+
+                                        /*if(y > 0){
+                                            out2 << "|";
+                                            temp.append("|");
+                                        }*/
+
+                                        comparar = extendida.logica[y].part_start - posAnterior2;
+                                        if(comparar > 0){
+                                            out2 << "Libre";
+                                            temp.append("Libre");
+
+                                            arr = 0;
+                                            arr = ((double)comparar)/((double)(information2.mbr_tamano - sizeof (struct MBR)));
+
+                                            porcentaje = 0;
+                                            porcentaje = (int)(arr*100);
+
+                                            out2 << " \\n " << porcentaje << "% del disco |";
+                                            temp.append("\\n");
+                                            temp.append(QString::number(porcentaje));
+                                            temp.append("% del disco |");
+                                        }
+                                        posAnterior2 = extendida.logica[y].part_start + extendida.logica[y].part_size;
+                                        out2 << "EBR|Logica";
+                                        temp.append("Logica");
+
+                                        arr = 0;
+                                        arr = ((double)extendida.logica[y].part_size)/((double)(information2.mbr_tamano - sizeof (struct MBR)));
+
+                                        porcentaje = 0;
+                                        porcentaje = (int)(arr*100);
+
+                                        out2 << " \\n " << porcentaje << "% del disco|";
                                     }
                                 }
-                                out << "}";
+
+                                comparar = 0;
+                                comparar = information2.mbr_partition[x].part_start+information2.mbr_partition[x].part_size;
+                                if((comparar - posAnterior2) > 0){
+                                    out2 << "Libre";
+
+                                    arr = 0;
+                                    arr = ((double)(comparar - posAnterior2))/((double)(information2.mbr_tamano - sizeof (struct MBR)));
+
+                                    porcentaje = 0;
+                                    porcentaje = (int)(arr*100);
+
+                                    out2 << " \\n " << porcentaje << "% del disco";
+                                }
+
+                                out2 << "}";
+                                temp.append("}}");
+
+                                out2 << "}";
                             }
                         }
                     }
 
-                    out << "\"]";
-                    out << "}";
+                    if((information2.mbr_tamano - posAnterior) > 0){
+                        out2 << "|Libre";
+                        temp.append("|Libre");
+
+                        if(par.value("path") == "/home/mia/disk3.png"){
+                            cout << "";
+                        }
+
+                        arr = 0;
+                        arr = ((double)(information2.mbr_tamano - posAnterior))/((double)(information2.mbr_tamano - sizeof (struct MBR)));
+
+                        porcentaje = 0;
+                        porcentaje = (int)(arr*100);
+                        out2 << " \\n " << porcentaje << "% del disco";
+                        temp.append("\\n");
+                        temp.append(QString::number(porcentaje));
+                        temp.append("% del disco |");
+                    }
+
+                    out2 << "\"]";
+                    out2 << "}";
+                    temp.append("\"]}");
                 }
                 else if(par.value("name") == "sb")
                 {
@@ -1535,7 +2076,6 @@ void Funcionalidad::Ejecutar(Nodo *temp){
 
                     out << "digraph G{ \n";
                     out << "rankdir=LR; \n";
-
                     file = fopen(mount[partLetra].path.toUtf8().constData(),"rb+");
                     fseek(file,mount[partLetra].numero[partNum].particion.part_start,SEEK_SET);
                     fread(&block,sizeof (struct SuperBloque),1,file);
@@ -1943,7 +2483,7 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                 }
                 else if(par.value("name") == "file")
                 {
-                    QString nuevoPath = par.value("file");
+                    QString nuevoPath = par.value("ruta");
                     nuevoPath.replace("\"","");
                     QStringList path = nuevoPath.split('/');
 
@@ -1992,6 +2532,9 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                 const char* command = g.c_str();
                 //cout<<command<<endl;
                 system(command);
+            }
+            else{
+                cout << "La particion no esta montada" << endl;
             }
         }
     }
@@ -2311,10 +2854,10 @@ QHash<QString,QString> Funcionalidad::parametros(Nodo *temp)
 
     if(temp->hijo.size() == 2){
         par = parametros(temp->hijo.first());
-        par.insert(temp->hijo.last()->token, temp->hijo.last()->valor);
+        par.insert(temp->hijo.last()->token.toLower(), temp->hijo.last()->valor);
 
     }else if(temp->hijo.size() == 1){
-        par.insert(temp->hijo.first()->token, temp->hijo.first()->valor);
+        par.insert(temp->hijo.first()->token.toLower(), temp->hijo.first()->valor);
     }
 
     return par;
@@ -2426,14 +2969,17 @@ void Funcionalidad::EjecutarComando(string n){
                yyrestart(input);
                if(yyparse()==0){
 
-                   Graficar(raiz);
+                   //Graficar(raiz);
                    Ejecutar(raiz);
+
                }else{
                    cout<<"Se encontraron errores en el comando especificado"<<endl;
                }
+               fclose(input);
     }
 }
 
+//METODOS FASE 1--------------------------------------------------------------------------------------------------------
 
 //METODOS FASE 2--------------------------------------------------------------------------------------------------------
 
@@ -4743,7 +5289,6 @@ void Funcionalidad::moverArchivo(QString name, int inodoDestino, int carpetaActu
             marcarBloqueLIbre(block,file);
             block.s_first_blo = primerBloqueLIbre(block, file);
             block.s_free_blocks_count--;
-
             innodo.i_block[13] = numBloqueApuntador;
 
             //Apuntador---------------------------------------------------------------------------

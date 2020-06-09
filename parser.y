@@ -57,7 +57,9 @@ class Nodo *nodo;
 INICIO: L_COMANDO{
         raiz = new Nodo(@1.first_line, @1.first_column,"S","S");
         raiz=$1;
-    };
+    }
+    |
+    {raiz = new Nodo(0, 0,"S","S");};
 
 L_COMANDO: L_COMANDO COMANDO{
                     $$=new Nodo(@1.first_line, @1.first_column,"L_COMANDO","L_COMANDO");
@@ -66,7 +68,6 @@ L_COMANDO: L_COMANDO COMANDO{
                 }
                |COMANDO{
                    $$=new Nodo(@1.first_line, @1.first_column,"L_COMANDO","L_COMANDO");
-
                    $$->add($1);
                };
 
@@ -85,6 +86,7 @@ L_PARAMETRO: L_PARAMETRO PARAMETRO{
                 |PARAMETRO{
                     $$=new Nodo(@1.first_line, @1.first_column,"L_PARAMETRO","L_PARAMETRO");
                     $$->add($1);
+
                 };
 
 PARAMETRO: Tguion identificador Tigual identificador{
