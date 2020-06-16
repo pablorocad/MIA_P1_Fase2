@@ -91,15 +91,28 @@ void Funcionalidad::Ejecutar(Nodo *temp){
     }
     else if(temp->token.toLower() == "rmdisk"){
         QHash<QString,QString> par = parametros(temp->hijo.first());//Tomamos todos nuestros parametros
+        string entrada = "";
         //QHash<QString,QString> par2 = parametros(temp);
         QString rutaAux = par.value("path");
         rutaAux.replace("\"","");
-        if(remove(rutaAux.toUtf8().constData()) != 0){
+
+        FILE *file;
+        file = fopen(rutaAux.toUtf8().constData(),"rb");
+
+        if(file == NULL){
             cout << "ERROR: no se encontro el disco: " << rutaAux.toStdString() << endl;
         }
         else{
-            cout << "Disco eliminado" << endl;
+            fclose(file);
+
+            cout << "¿Desea continuar con la eliminacion del disco? [S/N]" << endl;
+            cin >> entrada;
+
+            if(entrada == "S"){
+                remove(rutaAux.toUtf8().constData());
+            }
         }
+
     }
     else if(temp->token.toLower() == "fdisk")
     {//Crear Particion----------------------------------------------------------------
@@ -126,6 +139,9 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                 file = fopen(par.value("path").toUtf8().constData(),"rb+");
                 fread(&information,sizeof(struct MBR),1,file);
 
+                FILE *file_ra1;
+                file_ra1 = fopen(par.value("path").toUtf8().constData(),"rb+");
+
                 int unit = 1024;
                 if(par.value("unit") == "M"){
                     unit = 1024*1024;
@@ -146,6 +162,8 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                                     information.mbr_partition[x].part_size = tamanio;
                                     fseek(file,0,SEEK_SET);
                                     fwrite(&information,sizeof(struct MBR),1,file);
+                                    fseek(file_ra1,0,SEEK_SET);
+                                    fwrite(&information,sizeof(struct MBR),1,file_ra1);
                                     break;
                                 }else{
                                     cout << "Se esta eliminando mas espacio del tamaño de la particion" << endl;
@@ -168,6 +186,8 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                                         extendida.logica[y].part_size = tamanio;
                                         fseek(file,information.mbr_partition[x].part_start,SEEK_SET);
                                         fwrite(&extendida,sizeof(struct partExt),1,file);
+                                        fseek(file_ra1,information.mbr_partition[x].part_start,SEEK_SET);
+                                        fwrite(&extendida,sizeof(struct partExt),1,file_ra1);
                                         break;
                                     }else{
                                         cout << "Se esta eliminando mas espacio del tamaño de la particion" << endl;
@@ -179,6 +199,7 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                 }
 
                 fclose(file);
+                fclose(file_ra1);
             }
         }
         else if(!par.contains("delete"))
@@ -810,6 +831,8 @@ void Funcionalidad::Ejecutar(Nodo *temp){
         file = fopen(ruta.toUtf8().constData(), "rb+");
         fread(&information,sizeof(struct MBR),1,file);
 
+        bool noExiste = true;
+
         for(int x = 0; x < 4; x++)
         {
             QString n(information.mbr_partition[x].part_name);
@@ -818,6 +841,7 @@ void Funcionalidad::Ejecutar(Nodo *temp){
             {
                 if(n == par.value("name"))
                 {
+                    noExiste = false;
 
                     for(int m = 0; m < 27; m++)
                     {
@@ -866,6 +890,7 @@ void Funcionalidad::Ejecutar(Nodo *temp){
 
                     if(n2 == par.value("name"))
                     {
+                        noExiste = false;
 
                         for(int m = 0; m < 27; m++)
                         {
@@ -911,6 +936,10 @@ void Funcionalidad::Ejecutar(Nodo *temp){
                 }
 
             }
+        }
+
+        if(noExiste){
+            cout << "La particion: " << par.value("name").toStdString() << ", no existe" << endl;
         }
 
         fclose(file);
@@ -1670,6 +1699,60 @@ void Funcionalidad::Ejecutar(Nodo *temp){
             }
 
             crearArchivo(innodo,"",path,g);
+        }
+    }
+    else if (temp->token.toLower() == "find"){
+        QHash<QString,QString> par = parametros(temp->hijo.first());//Tomamos todos nuestros parametros
+
+        if(!par.contains("path"))
+        {
+            cout << "Falta el parametro PATH en crear reporte | linea: " << temp->linea << " columna: " << temp->columna << endl;
+        }
+        else if(!par.contains("name"))
+        {
+            cout << "Falta el parametro NAME en crear reporte | linea: " << temp->linea << " columna: " << temp->columna << endl;
+        }
+        else
+        {
+            QString pathAux = par.value("path");
+            pathAux.replace("\"","");
+            int x = 0;
+
+            if(pathAux != "/"){
+                QStringList path;
+                path = pathAux.split('/');
+                path.removeFirst();
+                x = buscarInnodo(path);
+            }
+            else{
+                pathAux = "";
+            }
+
+            string url = usuario.pathDisco.toStdString();
+            const char *u = url.c_str();
+
+            FILE *file;
+            file = fopen(u,"rb+");
+
+            MBR mbr;
+            SuperBloque block;
+
+            fread(&mbr, sizeof (struct MBR),1,file);
+            fseek(file,usuario.particion.part_start,SEEK_SET);
+            fread(&block,sizeof (struct SuperBloque),1,file);
+
+            QString rutaFinal;
+            rutaFinal = find(x,pathAux,pathAux,par.value("name"),block,file);
+
+            QStringList listaFind = rutaFinal.split('/');
+
+            QString arbol = mostrarArbolFind(listaFind,0,block,0,file);
+            string r = arbol.toStdString();
+            //string r = rutaFinal.toStdString();
+            cout << r << endl;
+
+            fclose(file);
+
         }
     }
     else if(temp->token.toLower() == "rep"){
@@ -2982,6 +3065,416 @@ void Funcionalidad::EjecutarComando(string n){
 //METODOS FASE 1--------------------------------------------------------------------------------------------------------
 
 //METODOS FASE 2--------------------------------------------------------------------------------------------------------
+
+QString Funcionalidad::find(int numInnodo,QString path,QString pathAnterior,QString nameFile,SuperBloque block,FILE *file)
+{
+    QString pathRetorno = path;
+
+        Innodo innodo;
+        fseek(file,block.s_inode_start,SEEK_SET);
+        fseek(file, numInnodo*block.s_inode_size,SEEK_CUR);
+        fread(&innodo,block.s_inode_size,1,file);//tomamos el innodo
+
+        if(innodo.i_type == '0'){
+            for(int x = 0; x < 12; x++)//Moverse en los bloques directos
+            {
+                if(innodo.i_block[x] != -1)//buscaremos unicamente en los bloques usados
+                {
+                    int num = innodo.i_block[x];
+                    fseek(file,block.s_block_start,SEEK_SET);//inicio del area bloques
+                    fseek(file, num*block.s_block_size,SEEK_CUR);// nos movemos al bloque
+
+                        BloqueCarpeta carpeta;
+                        fread(&carpeta,block.s_block_size,1,file);//leemos el bloque
+
+                        for(int y = 0; y < 4; y++)
+                        {
+
+                            if(carpeta.b_content[y].b_innodo != -1){
+                                QString name = "";
+                                for(char c : carpeta.b_content[y].b_name)
+                                {
+                                    if(c != NULL)
+                                    {
+                                    name.append(c);
+                                    }
+                                    else{
+                                        break;
+                                    }
+                                }
+
+                                if(name != "." && name != ".."){
+                                    if(name != nameFile)//si la carpeta no contiene lo que buscamos
+                                    {
+                                        QString pathEnv = pathRetorno;
+                                        pathEnv.append('/');
+                                        pathEnv.append(carpeta.b_content[y].b_name);
+                                        pathRetorno = find(carpeta.b_content[y].b_innodo,pathEnv,pathRetorno,nameFile,block,file);
+
+                                        if(pathRetorno != path)
+                                        {
+                                           return pathRetorno;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        pathRetorno.append('/');
+                                        pathRetorno.append(nameFile);
+                                        return pathRetorno;
+                                    }
+                                }
+                            }
+                        }
+                }
+            }
+
+            if(pathRetorno == path && innodo.i_block[12] != -1)//Bloque de apuntadores simple
+            {
+                BloqueApuntador apuntador;
+                int numAp = innodo.i_block[12];
+                fseek(file,block.s_block_start,SEEK_SET);//inicio del area bloques
+                fseek(file, numAp*block.s_block_size,SEEK_CUR);// nos movemos al bloque
+                fread(&apuntador,block.s_block_size,1,file);
+
+                for(int x = 0; x < 16; x++)
+                {
+                    if(apuntador.b_pointers[x] != -1)
+                    {
+                        int numCarpeta = apuntador.b_pointers[x];
+                        fseek(file,block.s_block_start,SEEK_SET);//inicio del area bloques
+                        fseek(file, numCarpeta*block.s_block_size,SEEK_CUR);// nos movemos al bloque
+
+                            BloqueCarpeta carpeta;
+                            fread(&carpeta,block.s_block_size,1,file);//leemos el bloque
+
+                            for(int y = 0; y < 4; y++)
+                            {
+
+                                if(carpeta.b_content[y].b_innodo != -1){
+                                    QString name = "";
+                                    for(char c : carpeta.b_content[y].b_name)
+                                    {
+                                        if(c != NULL)
+                                        {
+                                        name.append(c);
+                                        }
+                                        else{
+                                            break;
+                                        }
+                                    }
+
+                                    if(name != "." && name != ".."){
+                                        if(name != nameFile)//si la carpeta no contiene lo que buscamos
+                                        {
+                                            QString pathEnv = pathRetorno;
+                                            pathEnv.append('/');
+                                            pathEnv.append(carpeta.b_content[y].b_name);
+                                            pathRetorno = find(carpeta.b_content[y].b_innodo,pathEnv,pathRetorno,nameFile,block,file);
+
+                                            if(pathRetorno != path)
+                                            {
+                                               return pathRetorno;
+                                            }
+                                        }
+                                        else
+                                        {
+                                            pathRetorno.append('/');
+                                            pathRetorno.append(nameFile);
+                                            return pathRetorno;
+                                        }
+                                    }
+                                }
+                            }
+                    }
+                }
+
+            }
+
+            if(pathRetorno == path && innodo.i_block[13] != -1)
+            {
+                BloqueApuntador apuntadorDoble;
+                int numApDoble = innodo.i_block[13];
+                fseek(file,block.s_block_start,SEEK_SET);//inicio del area bloques
+                fseek(file, numApDoble*block.s_block_size,SEEK_CUR);// nos movemos al bloque
+                fread(&apuntadorDoble,block.s_block_size,1,file);
+
+                for(int posD = 0; posD < 16; posD++)
+                {
+                    if(apuntadorDoble.b_pointers[posD] != -1)
+                    {
+                        BloqueApuntador apuntador;
+                        int numAp = apuntadorDoble.b_pointers[posD];
+                        fseek(file,block.s_block_start,SEEK_SET);//inicio del area bloques
+                        fseek(file, numAp*block.s_block_size,SEEK_CUR);// nos movemos al bloque
+                        fread(&apuntador,block.s_block_size,1,file);
+
+                        for(int x = 0; x < 16; x++)
+                        {
+                            if(apuntador.b_pointers[x] != -1)
+                            {
+                                int numCarpeta = apuntador.b_pointers[x];
+                                fseek(file,block.s_block_start,SEEK_SET);//inicio del area bloques
+                                fseek(file, numCarpeta*block.s_block_size,SEEK_CUR);// nos movemos al bloque
+
+                                    BloqueCarpeta carpeta;
+                                    fread(&carpeta,block.s_block_size,1,file);//leemos el bloque
+
+                                    for(int y = 0; y < 4; y++)
+                                    {
+                                        if(carpeta.b_content[y].b_innodo != -1){
+                                            QString name = "";
+                                            for(char c : carpeta.b_content[y].b_name)
+                                            {
+                                                if(c != NULL)
+                                                {
+                                                name.append(c);
+                                                }
+                                                else{
+                                                    break;
+                                                }
+                                            }
+
+                                            if(name != "." && name != ".."){
+                                                if(name != nameFile)//si la carpeta no contiene lo que buscamos
+                                                {
+                                                    QString pathEnv = pathRetorno;
+                                                    pathEnv.append('/');
+                                                    pathEnv.append(carpeta.b_content[y].b_name);
+                                                    pathRetorno = find(carpeta.b_content[y].b_innodo,pathEnv,pathRetorno,nameFile,block,file);
+
+                                                    if(pathRetorno != path)
+                                                    {
+                                                       return pathRetorno;
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    pathRetorno.append('/');
+                                                    pathRetorno.append(nameFile);
+                                                    return pathRetorno;
+                                                }
+                                            }
+                                        }
+                                    }
+                            }
+                        }
+                    }
+                }
+            }
+
+        }
+
+
+    return pathAnterior;
+}
+
+QString Funcionalidad::mostrarArbolFind(QStringList path,int posicionPath,SuperBloque block,int numInnodo,FILE *file){
+
+    QString resultado = "";
+
+    if(path.at(posicionPath) == ""){
+        resultado.append("| /");
+        resultado.append("\n");
+    }
+    else{
+        resultado.append("|_");
+        resultado.append(path.at(posicionPath));
+        resultado.append("\n");
+    }
+    posicionPath++;
+
+    if(posicionPath < path.size()){
+        Innodo innodo;
+        fseek(file,block.s_inode_start,SEEK_SET);
+        fseek(file, numInnodo*block.s_inode_size,SEEK_CUR);
+        fread(&innodo,block.s_inode_size,1,file);//tomamos el innodo
+
+        if(innodo.i_type == '0'){
+            for(int x = 0; x < 12; x++)//Moverse en los bloques directos
+            {
+                if(innodo.i_block[x] != -1)//buscaremos unicamente en los bloques usados
+                {
+                    int num = innodo.i_block[x];
+                    fseek(file,block.s_block_start,SEEK_SET);//inicio del area bloques
+                    fseek(file, num*block.s_block_size,SEEK_CUR);// nos movemos al bloque
+
+                    BloqueCarpeta carpeta;
+                    fread(&carpeta,block.s_block_size,1,file);//leemos el bloque
+
+                    for(int y = 0; y < 4; y++)
+                    {
+
+                        if(carpeta.b_content[y].b_innodo != -1){
+                            QString name = "";
+                            for(char c : carpeta.b_content[y].b_name)
+                            {
+                                if(c != NULL)
+                                {
+                                name.append(c);
+                                }
+                                else{
+                                    break;
+                                }
+                            }
+
+                            if(name != "." && name != ".."){
+
+                                for(int z = 0; z < posicionPath; z++){
+                                    resultado.append("| ");
+                                }
+
+                                if(name != path.at(posicionPath)){
+                                    resultado.append("|_");
+                                    resultado.append(name);
+                                    resultado.append("\n");
+                                }
+                                else{
+
+                                    numInnodo = carpeta.b_content[y].b_innodo;
+                                    resultado.append(mostrarArbolFind(path,posicionPath,block,numInnodo,file));
+                                }
+
+                            }
+                        }
+                    }
+                }
+            }
+
+            if(innodo.i_block[12] != -1)//Bloque de apuntadores simple
+            {
+                BloqueApuntador apuntador;
+                int numAp = innodo.i_block[12];
+                fseek(file,block.s_block_start,SEEK_SET);//inicio del area bloques
+                fseek(file, numAp*block.s_block_size,SEEK_CUR);// nos movemos al bloque
+                fread(&apuntador,block.s_block_size,1,file);
+
+                for(int x = 0; x < 16; x++)
+                {
+                    if(apuntador.b_pointers[x] != -1)
+                    {
+                        int numCarpeta = apuntador.b_pointers[x];
+                        fseek(file,block.s_block_start,SEEK_SET);//inicio del area bloques
+                        fseek(file, numCarpeta*block.s_block_size,SEEK_CUR);// nos movemos al bloque
+
+                            BloqueCarpeta carpeta;
+                            fread(&carpeta,block.s_block_size,1,file);//leemos el bloque
+
+                            for(int y = 0; y < 4; y++)
+                            {
+
+                                if(carpeta.b_content[y].b_innodo != -1){
+                                    QString name = "";
+                                    for(char c : carpeta.b_content[y].b_name)
+                                    {
+                                        if(c != NULL)
+                                        {
+                                        name.append(c);
+                                        }
+                                        else{
+                                            break;
+                                        }
+                                    }
+
+                                    if(name != "." && name != ".."){
+
+                                        for(int z = 0; z < posicionPath; z++){
+                                            resultado.append("| ");
+                                        }
+
+                                        if(name != path.at(posicionPath)){
+                                            resultado.append("|_");
+                                            resultado.append(name);
+                                            resultado.append("\n");
+                                        }
+                                        else{
+
+                                            numInnodo = carpeta.b_content[y].b_innodo;
+                                            resultado.append(mostrarArbolFind(path,posicionPath,block,numInnodo,file));
+                                        }
+                                        resultado.append("\n");
+                                    }
+                                }
+                            }
+                    }
+                }
+
+            }
+
+            if(innodo.i_block[13] != -1)
+            {
+                BloqueApuntador apuntadorDoble;
+                int numApDoble = innodo.i_block[13];
+                fseek(file,block.s_block_start,SEEK_SET);//inicio del area bloques
+                fseek(file, numApDoble*block.s_block_size,SEEK_CUR);// nos movemos al bloque
+                fread(&apuntadorDoble,block.s_block_size,1,file);
+
+                for(int posD = 0; posD < 16; posD++)
+                {
+                    if(apuntadorDoble.b_pointers[posD] != -1)
+                    {
+                        BloqueApuntador apuntador;
+                        int numAp = apuntadorDoble.b_pointers[posD];
+                        fseek(file,block.s_block_start,SEEK_SET);//inicio del area bloques
+                        fseek(file, numAp*block.s_block_size,SEEK_CUR);// nos movemos al bloque
+                        fread(&apuntador,block.s_block_size,1,file);
+
+                        for(int x = 0; x < 16; x++)
+                        {
+                            if(apuntador.b_pointers[x] != -1)
+                            {
+                                int numCarpeta = apuntador.b_pointers[x];
+                                fseek(file,block.s_block_start,SEEK_SET);//inicio del area bloques
+                                fseek(file, numCarpeta*block.s_block_size,SEEK_CUR);// nos movemos al bloque
+
+                                    BloqueCarpeta carpeta;
+                                    fread(&carpeta,block.s_block_size,1,file);//leemos el bloque
+
+                                    for(int y = 0; y < 4; y++)
+                                    {
+
+                                        if(carpeta.b_content[y].b_innodo != -1){
+                                            QString name = "";
+                                            for(char c : carpeta.b_content[y].b_name)
+                                            {
+                                                if(c != NULL)
+                                                {
+                                                name.append(c);
+                                                }
+                                                else{
+                                                    break;
+                                                }
+                                            }
+
+                                            if(name != "." && name != ".."){
+
+                                                for(int z = 0; z < posicionPath; z++){
+                                                    resultado.append("| ");
+                                                }
+
+                                                if(name != path.at(posicionPath)){
+                                                    resultado.append("|_");
+                                                    resultado.append(name);
+                                                    resultado.append("\n");
+                                                }
+                                                else{
+
+                                                    numInnodo = carpeta.b_content[y].b_innodo;
+                                                    resultado.append(mostrarArbolFind(path,posicionPath,block,numInnodo,file));
+                                                }
+                                                resultado.append("\n");
+                                            }
+                                        }
+                                    }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+    }
+    return resultado;
+}
 
 void Funcionalidad::formatearParticion(QHash<QString,QString> par)
 {

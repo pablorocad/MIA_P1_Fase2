@@ -191,6 +191,9 @@ public:
 
     int decToBinary(int n);
 
+    QString find(int numInnodo,QString path,QString pathAnterior,QString nameFile,SuperBloque block,FILE *file);
+    QString mostrarArbolFind(QStringList path,int posicionPath,SuperBloque block,int numInnodo,FILE *file);
+
 private:
 
 };
